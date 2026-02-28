@@ -81,3 +81,14 @@ licensed under their [BSD 3-Clause license](LICENSE.ungoogled_chromium)).
 > [!NOTE]
 > We will add more documentation along with design and motivation guidelines in the future.
 All docs will be linked here along with other related content.
+
+## Upstream sync
+To sync Zephyr `main` with Helium upstream after detaching from the fork network:
+
+```bash
+./scripts/sync-upstream.sh
+```
+
+Useful options:
+- `--merge` (use merge instead of rebase)
+- `--no-push` (sync locally without pushing)
