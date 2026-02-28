@@ -1,0 +1,12 @@
+{
+  "/home/pho7on/.tmp/chromium-helium": {
+    "src/third_party/node/node_modules": [
+      "a817cffd6454bbe60a5ab047d2c20193997fe1a8"
+    ]
+  },
+  "/home/pho7on/.tmp/chromium-helium-work": {
+    "src/third_party/node/node_modules": [
+      "a817cffd6454bbe60a5ab047d2c20193997fe1a8"
+    ]
+  }
+}

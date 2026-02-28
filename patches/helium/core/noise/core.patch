@@ -83,7 +83,7 @@
 --- /dev/null
 +++ b/content/browser/helium_noise/noise_token_data.cc
 @@ -0,0 +1,112 @@
-+// Copyright 2026 The Helium Authors
++// Copyright 2026 The Zephyr Authors
 +// You can use, redistribute, and/or modify this source code under
 +// the terms of the GPL-3.0 license that can be found in the LICENSE file.
 +// -----------------------------------------------------------------------
@@ -198,7 +198,7 @@
 --- /dev/null
 +++ b/content/browser/helium_noise/noise_token_data.h
 @@ -0,0 +1,50 @@
-+// Copyright 2026 The Helium Authors
++// Copyright 2026 The Zephyr Authors
 +// You can use, redistribute, and/or modify this source code under
 +// the terms of the GPL-3.0 license that can be found in the LICENSE file.
 +// -----------------------------------------------------------------------
@@ -262,7 +262,7 @@
 --- /dev/null
 +++ b/third_party/blink/renderer/core/helium_noise/helium_noise_hash.cc
 @@ -0,0 +1,47 @@
-+// Copyright 2026 The Helium Authors
++// Copyright 2026 The Zephyr Authors
 +// You can use, redistribute, and/or modify this source code under
 +// the terms of the GPL-3.0 license that can be found in the LICENSE file.
 +// -----------------------------------------------------------------------
@@ -312,7 +312,7 @@
 --- /dev/null
 +++ b/third_party/blink/renderer/core/helium_noise/helium_noise_hash.h
 @@ -0,0 +1,44 @@
-+// Copyright 2026 The Helium Authors
++// Copyright 2026 The Zephyr Authors
 +// You can use, redistribute, and/or modify this source code under
 +// the terms of the GPL-3.0 license that can be found in the LICENSE file.
 +// -----------------------------------------------------------------------
@@ -366,7 +366,7 @@
 --- /dev/null
 +++ b/third_party/blink/renderer/core/helium_noise/build.gni
 @@ -0,0 +1,8 @@
-+# Copyright 2026 The Helium Authors
++# Copyright 2026 The Zephyr Authors
 +# You can use, redistribute, and/or modify this source code under
 +# the terms of the GPL-3.0 license that can be found in the LICENSE file.
 +
@@ -398,7 +398,7 @@
 --- /dev/null
 +++ b/third_party/blink/public/common/helium_noise/noise_token.h
 @@ -0,0 +1,52 @@
-+// Copyright 2026 The Helium Authors
++// Copyright 2026 The Zephyr Authors
 +// You can use, redistribute, and/or modify this source code under
 +// the terms of the GPL-3.0 license that can be found in the LICENSE file.
 +// -----------------------------------------------------------------------
@@ -453,7 +453,7 @@
 --- /dev/null
 +++ b/third_party/blink/public/mojom/helium_noise/noise_token.mojom
 @@ -0,0 +1,16 @@
-+// Copyright 2026 The Helium Authors
++// Copyright 2026 The Zephyr Authors
 +// You can use, redistribute, and/or modify this source code under
 +// the terms of the GPL-3.0 license that can be found in the LICENSE file.
 +
@@ -472,7 +472,7 @@
 --- /dev/null
 +++ b/third_party/blink/public/common/helium_noise/noise_token_mojom_traits.h
 @@ -0,0 +1,64 @@
-+// Copyright 2026 The Helium Authors
++// Copyright 2026 The Zephyr Authors
 +// You can use, redistribute, and/or modify this source code under
 +// the terms of the GPL-3.0 license that can be found in the LICENSE file.
 +// -----------------------------------------------------------------------
@@ -539,7 +539,7 @@
 --- /dev/null
 +++ b/third_party/blink/public/mojom/helium_noise/BUILD.gn
 @@ -0,0 +1,40 @@
-+# Copyright 2026 The Helium Authors
++# Copyright 2026 The Zephyr Authors
 +# You can use, redistribute, and/or modify this source code under
 +# the terms of the GPL-3.0 license that can be found in the LICENSE file.
 +

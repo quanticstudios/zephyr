@@ -81,7 +81,7 @@
 --- /dev/null
 +++ b/third_party/blink/renderer/core/helium_noise/canvas_noising_helper.cc
 @@ -0,0 +1,259 @@
-+// Copyright 2026 The Helium Authors
++// Copyright 2026 The Zephyr Authors
 +// You can use, redistribute, and/or modify this source code under
 +// the terms of the GPL-3.0 license that can be found in the LICENSE file.
 +// -----------------------------------------------------------------------
@@ -343,7 +343,7 @@
 --- /dev/null
 +++ b/third_party/blink/renderer/core/helium_noise/canvas_noising_helper.h
 @@ -0,0 +1,31 @@
-+// Copyright 2026 The Helium Authors
++// Copyright 2026 The Zephyr Authors
 +// You can use, redistribute, and/or modify this source code under
 +// the terms of the GPL-3.0 license that can be found in the LICENSE file.
 +// -----------------------------------------------------------------------
