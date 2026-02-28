@@ -260,6 +260,7 @@ helium/hop/setup.patch
 helium/hop/disable-password-manager.patch
 
 helium/ui/layout-constants.patch
+helium/ui/layout-constants-arc-harmony.patch
 helium/ui/layout-provider.patch
 helium/ui/update-cr-components.patch
 helium/ui/always-use-better-ntp.patch
@@ -268,6 +269,7 @@ helium/ui/remove-toolbar-corners.patch
 helium/ui/location-bar.patch
 helium/ui/location-bar-page-action.patch
 helium/ui/tabs.patch
+helium/ui/tabs-arc-shape-polish.patch
 helium/ui/tab-strip-controls.patch
 helium/ui/toolbar.patch
 helium/ui/toolbar-window-frame-hit-test.patch
@@ -331,6 +333,8 @@ helium/ui/layout/vertical-tab-search-anchor-nonaction.patch
 helium/ui/layout/vertical-command-launcher.patch
 helium/ui/layout/vertical-hover-reliability.patch
 helium/ui/layout/vertical-command-launcher-behavior.patch
+helium/ui/zephyr-sidebar-surface.patch
+helium/ui/layout/vertical-arc-visual-polish.patch
 
 helium/ui/pdf-viewer.patch
 helium/ui/hide-pip-live-caption-button.patch

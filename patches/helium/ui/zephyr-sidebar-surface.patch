@@ -1,0 +1,48 @@
+--- a/chrome/browser/ui/color/chrome_color_id.h
++++ b/chrome/browser/ui/color/chrome_color_id.h
+@@ -0,2 +0,7 @@
+     E_CPONLY(kColorTabStrokeFrameActive) \
+     E_CPONLY(kColorTabStrokeFrameInactive) \
++    /* Zephyr sidebar surface */ \
++    E_CPONLY(kColorZephyrSidebarSurface) \
++    E_CPONLY(kColorZephyrSidebarSurfaceInactive) \
++    E_CPONLY(kColorZephyrSidebarTabHover) \
++    E_CPONLY(kColorZephyrSidebarTabSelected) \
+--- a/chrome/browser/ui/color/chrome_color_mixer.cc
++++ b/chrome/browser/ui/color/chrome_color_mixer.cc
+@@ -0,0 +0,14 @@ void AddChromeColorMixer(ui::ColorProvid
++  // Zephyr sidebar surface colors.
++  // Sidebar is 88% frame color + 12% neutral reference for a subtle warm lift.
++  mixer[kColorZephyrSidebarSurface] = dark_mode
++      ? AlphaBlend({ui::kColorFrameActive}, {kColorRefNeutral17}, 0xE0)
++      : AlphaBlend({ui::kColorFrameActive}, {kColorRefNeutral96}, 0xE0);
++  mixer[kColorZephyrSidebarSurfaceInactive] = dark_mode
++      ? AlphaBlend({ui::kColorFrameInactive}, {kColorRefNeutral17}, 0xE0)
++      : AlphaBlend({ui::kColorFrameInactive}, {kColorRefNeutral96}, 0xE0);
++  // Hover/selected states: white overlay on sidebar surface.
++  mixer[kColorZephyrSidebarTabHover] =
++      AlphaBlend({SK_ColorWHITE}, {kColorZephyrSidebarSurface}, 0x14);
++  mixer[kColorZephyrSidebarTabSelected] =
++      AlphaBlend({SK_ColorWHITE}, {kColorZephyrSidebarSurface}, 0x26);
++
+--- a/chrome/browser/ui/views/frame/vertical_tab_strip_region_view.cc
++++ b/chrome/browser/ui/views/frame/vertical_tab_strip_region_view.cc
+@@ -0,0 +0,2 @@
++#include "ui/gfx/color_utils.h"
++#include "ui/views/background.h"
+@@ -0,5 +0,3 @@ VerticalTabStripRegionView::VerticalTabS
+-  SetBackground(std::make_unique<TopContainerBackground>(
+-      browser_view, TopContainerBackground::ColorChoice::kFrameColor));
+   UpdateBackgroundColors();
+ }
+
+@@ -0,2 +0,8 @@ void VerticalTabStripRegionView::UpdateB
+-  SchedulePaint();
++  const auto* cp = GetColorProvider();
++  if (cp) {
++    SetBackground(views::CreateThemedSolidBackground(
++        IsFrameActive() ? kColorZephyrSidebarSurface
++                        : kColorZephyrSidebarSurfaceInactive));
++  }
++  SchedulePaint();
+ }

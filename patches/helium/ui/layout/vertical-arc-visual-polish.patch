@@ -1,0 +1,47 @@
+--- a/chrome/browser/ui/layout_constants.cc
++++ b/chrome/browser/ui/layout_constants.cc
+@@ -139,11 +139,11 @@ int GetLayoutConstant(LayoutConstant con
+     case LayoutConstant::kVerticalTabHeight:
+-      return 30;
++      return 36;
+     case LayoutConstant::kVerticalTabMinWidth:
+       return 30;
+     case LayoutConstant::kVerticalTabStripUncollapsedPadding:
+-      return 6;
++      return 10;
+     case LayoutConstant::kVerticalTabStripCollapsedPadding:
+-      return 4;
++      return 6;
+     case LayoutConstant::kVerticalTabStripTopButtonIconSize:
+       return 20;
+     case LayoutConstant::kVerticalTabStripBottomButtonPadding:
+--- a/chrome/browser/ui/views/frame/vertical_tab_strip_region_view.h
++++ b/chrome/browser/ui/views/frame/vertical_tab_strip_region_view.h
+@@ -52,7 +52,7 @@ class VerticalTabStripRegionView final :
+   // TODO(crbug.com/465832180): Replace constant based width final max width for
+   // view.
+   static constexpr int kUncollapsedMaxWidth = 400;
+-  static constexpr int kCollapsedWidth = 38;
++  static constexpr int kCollapsedWidth = 42;
+   // TODO(crbug.com/465833741): Determine snapping behavior.
+   static constexpr int kCollapseSnapWidth =
+       (kUncollapsedMinWidth + kCollapsedWidth) / 2;
+--- a/chrome/browser/ui/views/frame/vertical_tab_strip_region_view.cc
++++ b/chrome/browser/ui/views/frame/vertical_tab_strip_region_view.cc
+@@ -0,5 +0,5 @@
+ namespace {
+-constexpr int kRegionVerticalPadding = 3;
+-constexpr int kBottomContainerGap = 2;
++constexpr int kRegionVerticalPadding = 6;
++constexpr int kBottomContainerGap = 4;
+ constexpr int kDefaultWidthSnapDistance = 6;
+ }  // namespace
+--- a/chrome/browser/ui/views/tabs/vertical/vertical_tab_strip_top_container.cc
++++ b/chrome/browser/ui/views/tabs/vertical/vertical_tab_strip_top_container.cc
+@@ -0,4 +0,4 @@
+ namespace {
+-constexpr int kTopButtonPadding = 3;
+-constexpr int kCollapsedTopButtonPadding = 2;
++constexpr int kTopButtonPadding = 4;
++constexpr int kCollapsedTopButtonPadding = 3;
+ }  // namespace

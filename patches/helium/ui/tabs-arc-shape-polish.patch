@@ -1,0 +1,26 @@
+--- a/chrome/browser/ui/tabs/tab_style.cc
++++ b/chrome/browser/ui/tabs/tab_style.cc
+@@ -93,11 +93,11 @@ int TabStyle::GetMinimumInactiveWidth()
+ }
+
+ int TabStyle::GetTopCornerRadius() const {
+-  return 8;
++  return 12;
+ }
+
+ int TabStyle::GetBottomCornerRadius() const {
+-  return 8;
++  return 12;
+ }
+
+ int TabStyle::GetTabOverlap() const {
+--- a/chrome/browser/ui/views/tabs/tab_style_views.cc
++++ b/chrome/browser/ui/views/tabs/tab_style_views.cc
+@@ -210,6 +210,6 @@ SkPath TabStyleViewsImpl::GetPath(TabSty
+   float content_corner_radius =
+       GetTopCornerRadiusForWidth(tab()->width()) * scale;
+-  float extension_corner_radius = 4 * scale;
++  float extension_corner_radius = 6 * scale;
+
+   const float separator_overlap = (tab_style()->GetSeparatorMargins().width() +
+                                    tab_style()->GetSeparatorSize().width()) *

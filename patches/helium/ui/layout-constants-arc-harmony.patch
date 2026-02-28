@@ -1,0 +1,20 @@
+--- a/chrome/browser/ui/layout_constants.cc
++++ b/chrome/browser/ui/layout_constants.cc
+@@ -22,7 +22,7 @@ int GetLayoutConstant(LayoutConstant con
+   const bool touch_ui = ui::TouchUiController::Get()->touch_ui();
+   switch (constant) {
+     case LayoutConstant::kHeliumBasePadding:
+-      return 3;
++      return 4;
+     case LayoutConstant::kAppMenuProfileRowAvatarIconSize:
+       return 24;
+     case LayoutConstant::kAppMenuMaximumCharacterLength:
+@@ -55,7 +55,7 @@ int GetLayoutConstant(LayoutConstant con
+     case LayoutConstant::kLocationBarChildInteriorPadding:
+       return 3;
+     case LayoutConstant::kLocationBarChildCornerRadius:
+-      return 6;
++      return 10;
+     case LayoutConstant::kLocationBarChipIconSize:
+       return 16;
+     case LayoutConstant::kLocationBarChipPadding:
