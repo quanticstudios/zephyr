@@ -71,7 +71,7 @@
 -      prefs::kVerticalTabsEnabled, false,
 +  registry->RegisterIntegerPref(
 +      prefs::kHeliumLayout,
-+      std::to_underlying(HeliumLayoutType::kHorizontal),
++      std::to_underlying(HeliumLayoutType::kVertical),
        user_prefs::PrefRegistrySyncable::SYNCABLE_PREF);
 +  registry->RegisterBooleanPref(prefs::kHeliumVerticalRightAligned,
 +                                false);
