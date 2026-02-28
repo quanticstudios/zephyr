@@ -1,0 +1,39 @@
+--- a/chrome/browser/resources/tab_search/command_launcher_page.css
++++ b/chrome/browser/resources/tab_search/command_launcher_page.css
+@@ -0,0 +0,33 @@
++/* Zephyr folder action rows */
++.row.folder-action {
++  padding-inline-start: 12px;
++}
++
++.row .badge {
++  align-items: center;
++  border-radius: 4px;
++  display: inline-flex;
++  font-size: 10px;
++  font-weight: 600;
++  height: 18px;
++  letter-spacing: 0.04em;
++  margin-inline-start: 6px;
++  padding: 0 5px;
++  text-transform: uppercase;
++}
++
++.row .badge.folder {
++  background: var(--cr-fallback-color-secondary-container);
++  color: var(--cr-fallback-color-on-secondary-container);
++}
++
++.row .folder-icon {
++  --cr-icon-size: 14px;
++  color: var(--cr-secondary-text-color);
++  margin-inline-end: 8px;
++}
++
++.row .theme-dot {
++  border-radius: 50%;
++  display: inline-block;
++  height: 8px;
++  margin-inline-start: auto;
++  width: 8px;
++}

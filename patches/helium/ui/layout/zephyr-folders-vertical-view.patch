@@ -1,0 +1,474 @@
+--- a/chrome/browser/ui/views/tabs/vertical/BUILD.gn
++++ b/chrome/browser/ui/views/tabs/vertical/BUILD.gn
+@@ -52,6 +52,8 @@
+     "vertical_tab_group_header_view.h",
+     "vertical_tab_group_view.cc",
+     "vertical_tab_group_view.h",
++    "zephyr_folder_header_view.cc",
++    "zephyr_folder_header_view.h",
+     "vertical_tab_strip_bottom_container.cc",
+     "vertical_tab_strip_scroll_bar.cc",
+     "vertical_tab_strip_top_container.cc",
+--- a/chrome/browser/ui/views/tabs/vertical/vertical_tab_drag_handler.h
++++ b/chrome/browser/ui/views/tabs/vertical/vertical_tab_drag_handler.h
+@@ -64,6 +64,10 @@
+   // Returns true if there is an ongoing drag where a group is being moved.
+   virtual bool IsDraggingGroups() const = 0;
+ 
++  // Returns a stable context index for commands that should target the current
++  // dragged/selected set of tabs.
++  virtual int GetDragContextIndex() const = 0;
++
+   // For vertical tabs, `TabSlotView` doesn't represent the actual tab
+   // view. This method converts `view` to its actual tab view, or nullptr
+   // if this handler doesn't manage it.
+@@ -101,6 +105,7 @@
+   bool IsViewDragging(const views::View& view) const override;
+   bool IsDraggingPinnedTabs() const override;
+   bool IsDraggingGroups() const override;
++  int GetDragContextIndex() const override;
+   views::View* ViewFromTabSlot(TabSlotView* view) const override;
+ 
+   // TabDragContext
+--- a/chrome/browser/ui/views/tabs/vertical/vertical_tab_drag_handler.cc
++++ b/chrome/browser/ui/views/tabs/vertical/vertical_tab_drag_handler.cc
+@@ -438,6 +438,17 @@
+   return !drag_controller_->GetSessionData().dragging_groups.empty();
+ }
+ 
++int VerticalTabDragHandlerImpl::GetDragContextIndex() const {
++  const auto selected_indices =
++      tab_strip_model_->selection_model()
++          .GetListSelectionModel()
++          .selected_indices();
++  if (!selected_indices.empty()) {
++    return *selected_indices.begin();
++  }
++  return tab_strip_model_->active_index();
++}
++
+ std::optional<tab_groups::TabGroupId>
+ VerticalTabDragHandlerImpl::GetDraggingGroupHeaderId() const {
+   return drag_controller_ ? drag_controller_->GetSessionData().group_header_id()
+--- a/chrome/browser/ui/views/tabs/vertical/vertical_unpinned_tab_container_view.h
++++ b/chrome/browser/ui/views/tabs/vertical/vertical_unpinned_tab_container_view.h
+@@ -5,6 +5,10 @@
+ #ifndef CHROME_BROWSER_UI_VIEWS_TABS_VERTICAL_VERTICAL_UNPINNED_TAB_CONTAINER_VIEW_H_
+ #define CHROME_BROWSER_UI_VIEWS_TABS_VERTICAL_VERTICAL_UNPINNED_TAB_CONTAINER_VIEW_H_
+ 
++#include <map>
++#include <optional>
++#include <string>
++
+ #include "base/callback_list.h"
+ #include "base/memory/raw_ptr.h"
+ #include "chrome/browser/ui/views/tabs/vertical/tab_collection_animating_layout_manager.h"
+@@ -16,6 +20,11 @@
+ class TabCollectionNode;
+ class VerticalTabDragHandler;
+ class VerticalTabGroupView;
++class ZephyrFolderHeaderView;
++
++namespace tabs {
++class ZephyrFolderWindowController;
++}  // namespace tabs
+ 
+ // Container for the vertical tabstrip's unpinned tabs.
+ class VerticalUnpinnedTabContainerView
+@@ -59,12 +68,23 @@
+                                const gfx::Rect& proposed_group_bounds,
+                                const gfx::Point& point_in_screen) const;
+ 
++  tabs::ZephyrFolderWindowController* GetFolderController() const;
++  void MaybeObserveFolderModel();
++  void OnFoldersChanged();
++  void SyncFolderHeaders();
++  std::optional<std::string> GetFolderForView(const views::View* view) const;
++  void ToggleFolderCollapsed(const std::string& folder_id);
++  void MoveDraggedSelectionToFolder(const std::string& folder_id);
++  void RemoveDraggedSelectionFromFolder();
++
+   void ResetCollectionNode();
+ 
+   raw_ptr<TabCollectionNode> collection_node_;
+   const raw_ref<TabCollectionAnimatingLayoutManager> layout_manager_;
+ 
+   base::CallbackListSubscription node_destroyed_subscription_;
++  base::CallbackListSubscription folder_model_subscription_;
++  std::map<std::string, raw_ptr<ZephyrFolderHeaderView>> folder_headers_;
+ };
+ 
+ #endif  // CHROME_BROWSER_UI_VIEWS_TABS_VERTICAL_VERTICAL_UNPINNED_TAB_CONTAINER_VIEW_H_
+--- a/chrome/browser/ui/views/tabs/vertical/vertical_unpinned_tab_container_view.cc
++++ b/chrome/browser/ui/views/tabs/vertical/vertical_unpinned_tab_container_view.cc
+@@ -4,7 +4,21 @@
+ 
+ #include "chrome/browser/ui/views/tabs/vertical/vertical_unpinned_tab_container_view.h"
+ 
++#include <map>
++#include <optional>
++#include <set>
++#include <string>
++#include <vector>
++#include <variant>
++
++#include "base/functional/bind.h"
++#include "chrome/browser/ui/browser.h"
++#include "chrome/browser/ui/browser_window/public/browser_window_features.h"
+ #include "chrome/browser/ui/layout_constants.h"
++#include "chrome/browser/ui/tabs/tab_strip_model.h"
++#include "chrome/browser/ui/tabs/zephyr_folder_model.h"
++#include "chrome/browser/ui/tabs/zephyr_folder_window_controller.h"
++#include "chrome/browser/ui/views/frame/browser_view.h"
+ #include "chrome/browser/ui/views/tabs/vertical/tab_collection_animating_layout_manager.h"
+ #include "chrome/browser/ui/views/tabs/vertical/tab_collection_node.h"
+ #include "chrome/browser/ui/views/tabs/vertical/vertical_dragged_tabs_container.h"
+@@ -13,6 +27,8 @@
+ #include "chrome/browser/ui/views/tabs/vertical/vertical_tab_group_view.h"
+ #include "chrome/browser/ui/views/tabs/vertical/vertical_tab_strip_controller.h"
+ #include "chrome/browser/ui/views/tabs/vertical/vertical_tab_view.h"
++#include "chrome/browser/ui/views/tabs/vertical/zephyr_folder_header_view.h"
++#include "components/tabs/public/tab_interface.h"
+ #include "ui/base/metadata/metadata_impl_macros.h"
+ #include "ui/gfx/geometry/rect.h"
+ #include "ui/views/controls/scroll_view.h"
+@@ -92,12 +108,19 @@
+   node_destroyed_subscription_ = collection_node_->RegisterWillDestroyCallback(
+       base::BindOnce(&VerticalUnpinnedTabContainerView::ResetCollectionNode,
+                      base::Unretained(this)));
++
++  MaybeObserveFolderModel();
++  SyncFolderHeaders();
+ }
+ 
+ VerticalUnpinnedTabContainerView::~VerticalUnpinnedTabContainerView() = default;
+ 
+ views::ProposedLayout VerticalUnpinnedTabContainerView::CalculateProposedLayout(
+     const views::SizeBounds& size_bounds) const {
++  // Folder membership can change outside of explicit view mutations. Keep the
++  // auxiliary header views in sync before producing geometry.
++  const_cast<VerticalUnpinnedTabContainerView*>(this)->SyncFolderHeaders();
++
+   views::ProposedLayout layouts;
+   int width = 0;
+   int height = 0;
+@@ -107,10 +130,36 @@
+       is_collapsed ? LayoutConstant::kVerticalTabStripCollapsedPadding
+                    : LayoutConstant::kVerticalTabStripUncollapsedPadding);
+   const auto children = collection_node_->GetDirectChildren();
++  std::vector<views::View*> ordered_children;
++  std::map<std::string, bool> emitted_headers;
++  std::map<std::string, bool> collapsed_by_folder;
++  if (auto* folder_controller = GetFolderController()) {
++    for (const auto& folder : folder_controller->GetFolders()) {
++      collapsed_by_folder[folder.id] = folder.collapsed;
++    }
++  }
++
++  ordered_children.reserve(children.size() + folder_headers_.size());
++  for (views::View* child : children) {
++    const std::optional<std::string> folder_id = GetFolderForView(child);
++    if (folder_id.has_value()) {
++      auto it = folder_headers_.find(*folder_id);
++      if (it != folder_headers_.end()) {
++        if (!emitted_headers[*folder_id]) {
++          ordered_children.push_back(it->second.get());
++          emitted_headers[*folder_id] = true;
++        }
++        if (collapsed_by_folder[*folder_id]) {
++          continue;
++        }
++      }
++    }
++    ordered_children.push_back(child);
++  }
+ 
+   // Layout children in order. Children will have their preferred height and
+   // fill available width.
+-  for (auto* child : children) {
++  for (auto* child : ordered_children) {
+     // The leading inset should not be applied for tab groups when the tab strip
+     // is collapsed since the group color line is drawn in that space.
+     int x = views::AsViewClass<VerticalTabGroupView>(child) && is_collapsed
+@@ -139,7 +188,7 @@
+     width = std::max(width, bounds.width() + bounds.x());
+   }
+   // Remove excess padding if needed.
+-  if (!children.empty()) {
++  if (!ordered_children.empty()) {
+     height -= kTabVerticalPadding;
+   }
+ 
+@@ -156,6 +205,8 @@
+ }
+ 
+ void VerticalUnpinnedTabContainerView::ResetCollectionNode() {
++  folder_model_subscription_ = {};
++  folder_headers_.clear();
+   collection_node_ = nullptr;
+ }
+ 
+@@ -193,6 +244,12 @@
+   const views::ProposedLayout& target_layout = layout_manager_->target_layout();
+   views::View* view_at_point =
+       GetViewForDragBounds(target_layout, dragged_tab_bounds);
++  if (auto* folder_header =
++          views::AsViewClass<ZephyrFolderHeaderView>(view_at_point)) {
++    MoveDraggedSelectionToFolder(folder_header->folder_id());
++    return;
++  }
++
+   const TabCollectionNode* node = nullptr;
+   if (auto* tab_view = views::AsViewClass<VerticalTabView>(view_at_point)) {
+     node = tab_view->collection_node();
+@@ -210,6 +267,7 @@
+     node = split_tab_view->collection_node();
+   }
+   if (node) {
++    RemoveDraggedSelectionFromFolder();
+     GetDragHandler().HandleDraggedTabsOverNode(*node, std::nullopt);
+   }
+ }
+@@ -292,5 +350,142 @@
+                            required_overlap_amount);
+ }
+ 
++tabs::ZephyrFolderWindowController*
++VerticalUnpinnedTabContainerView::GetFolderController() const {
++  const auto* controller = collection_node_ ? collection_node_->GetController()
++                                            : nullptr;
++  if (!controller) {
++    return nullptr;
++  }
++  BrowserView* browser_view = controller->browser_view();
++  if (!browser_view) {
++    return nullptr;
++  }
++  return browser_view->browser()->GetFeatures().zephyr_folder_window_controller();
++}
++
++void VerticalUnpinnedTabContainerView::MaybeObserveFolderModel() {
++  if (folder_model_subscription_) {
++    return;
++  }
++  auto* folder_controller = GetFolderController();
++  if (!folder_controller) {
++    return;
++  }
++  folder_model_subscription_ = folder_controller->folder_model()->RegisterOnChanged(
++      base::BindRepeating(&VerticalUnpinnedTabContainerView::OnFoldersChanged,
++                          base::Unretained(this)));
++}
++
++void VerticalUnpinnedTabContainerView::OnFoldersChanged() {
++  SyncFolderHeaders();
++  InvalidateLayout();
++}
++
++void VerticalUnpinnedTabContainerView::SyncFolderHeaders() {
++  MaybeObserveFolderModel();
++
++  tabs::ZephyrFolderWindowController* folder_controller = GetFolderController();
++  if (!folder_controller) {
++    for (auto& [_, header] : folder_headers_) {
++      RemoveChildViewT(header.get());
++    }
++    folder_headers_.clear();
++    return;
++  }
++
++  const std::vector<tabs::ZephyrFolderModel::Folder> folders =
++      folder_controller->GetFolders();
++  std::set<std::string> active_ids;
++  for (const auto& folder : folders) {
++    active_ids.insert(folder.id);
++  }
++
++  for (auto it = folder_headers_.begin(); it != folder_headers_.end();) {
++    if (active_ids.contains(it->first)) {
++      ++it;
++      continue;
++    }
++    RemoveChildViewT(it->second.get());
++    it = folder_headers_.erase(it);
++  }
++
++  for (const auto& folder : folders) {
++    ZephyrFolderHeaderView* header = nullptr;
++    auto it = folder_headers_.find(folder.id);
++    if (it == folder_headers_.end()) {
++      header = AddChildView(std::make_unique<ZephyrFolderHeaderView>(
++          folder.id, base::BindRepeating(
++                         &VerticalUnpinnedTabContainerView::ToggleFolderCollapsed,
++                         base::Unretained(this))));
++      folder_headers_[folder.id] = header;
++    } else {
++      header = it->second.get();
++    }
++    header->SetVisible(true);
++    header->Update(folder.title, folder.collapsed);
++  }
++}
++
++std::optional<std::string> VerticalUnpinnedTabContainerView::GetFolderForView(
++    const views::View* view) const {
++  auto* tab_view = views::AsViewClass<const VerticalTabView>(view);
++  if (!tab_view) {
++    return std::nullopt;
++  }
++
++  const TabCollectionNode* node = tab_view->collection_node();
++  if (!node || !std::holds_alternative<const tabs::TabInterface*>(node->GetNodeData())) {
++    return std::nullopt;
++  }
++
++  const tabs::TabInterface* tab =
++      std::get<const tabs::TabInterface*>(node->GetNodeData());
++  const std::optional<int32_t> session_id = tabs::GetSessionIdForTab(tab);
++  if (!session_id.has_value()) {
++    return std::nullopt;
++  }
++
++  tabs::ZephyrFolderWindowController* folder_controller = GetFolderController();
++  if (!folder_controller) {
++    return std::nullopt;
++  }
++  return folder_controller->folder_model()->GetFolderForSessionId(*session_id);
++}
++
++void VerticalUnpinnedTabContainerView::ToggleFolderCollapsed(
++    const std::string& folder_id) {
++  tabs::ZephyrFolderWindowController* folder_controller = GetFolderController();
++  if (!folder_controller) {
++    return;
++  }
++  folder_controller->ToggleFolderCollapsed(folder_id);
++}
++
++void VerticalUnpinnedTabContainerView::MoveDraggedSelectionToFolder(
++    const std::string& folder_id) {
++  tabs::ZephyrFolderWindowController* folder_controller = GetFolderController();
++  if (!folder_controller) {
++    return;
++  }
++  const int context_index = GetDragHandler().GetDragContextIndex();
++  if (context_index == TabStripModel::kNoTab) {
++    return;
++  }
++  folder_controller->MoveSelectionToFolder(context_index, folder_id);
++}
++
++void VerticalUnpinnedTabContainerView::RemoveDraggedSelectionFromFolder() {
++  tabs::ZephyrFolderWindowController* folder_controller = GetFolderController();
++  if (!folder_controller) {
++    return;
++  }
++  const int context_index = GetDragHandler().GetDragContextIndex();
++  if (context_index == TabStripModel::kNoTab) {
++    return;
++  }
++  folder_controller->RemoveSelectionFromFolder(context_index);
++}
++
+ BEGIN_METADATA(VerticalUnpinnedTabContainerView)
+ END_METADATA
+--- a/chrome/browser/ui/views/tabs/vertical/zephyr_folder_header_view.h
++++ b/chrome/browser/ui/views/tabs/vertical/zephyr_folder_header_view.h
+@@ -0,0 +1,40 @@
++// Copyright 2026 The Chromium Authors
++// Use of this source code is governed by a BSD-style license that can be
++// found in the LICENSE file.
++
++#ifndef CHROME_BROWSER_UI_VIEWS_TABS_VERTICAL_ZEPHYR_FOLDER_HEADER_VIEW_H_
++#define CHROME_BROWSER_UI_VIEWS_TABS_VERTICAL_ZEPHYR_FOLDER_HEADER_VIEW_H_
++
++#include <string>
++
++#include "base/functional/callback.h"
++#include "ui/base/metadata/metadata_header_macros.h"
++#include "ui/views/controls/button/label_button.h"
++
++// Functional, styling-neutral header view used by Zephyr folders in the
++// vertical tab strip.
++class ZephyrFolderHeaderView : public views::LabelButton {
++  METADATA_HEADER(ZephyrFolderHeaderView, views::LabelButton)
++
++ public:
++  using ToggleCallback = base::RepeatingCallback<void(const std::string&)>;
++
++  ZephyrFolderHeaderView(std::string folder_id, ToggleCallback toggle_callback);
++  ZephyrFolderHeaderView(const ZephyrFolderHeaderView&) = delete;
++  ZephyrFolderHeaderView& operator=(const ZephyrFolderHeaderView&) = delete;
++  ~ZephyrFolderHeaderView() override;
++
++  const std::string& folder_id() const { return folder_id_; }
++  bool collapsed() const { return collapsed_; }
++
++  void Update(const std::u16string& title, bool collapsed);
++
++ private:
++  void OnPressed(const ui::Event& event);
++
++  std::string folder_id_;
++  bool collapsed_ = false;
++  ToggleCallback toggle_callback_;
++};
++
++#endif  // CHROME_BROWSER_UI_VIEWS_TABS_VERTICAL_ZEPHYR_FOLDER_HEADER_VIEW_H_
+--- a/chrome/browser/ui/views/tabs/vertical/zephyr_folder_header_view.cc
++++ b/chrome/browser/ui/views/tabs/vertical/zephyr_folder_header_view.cc
+@@ -0,0 +1,42 @@
++// Copyright 2026 The Chromium Authors
++// Use of this source code is governed by a BSD-style license that can be
++// found in the LICENSE file.
++
++#include "chrome/browser/ui/views/tabs/vertical/zephyr_folder_header_view.h"
++
++#include <utility>
++
++#include "base/functional/bind.h"
++#include "ui/events/event.h"
++#include "ui/gfx/text_constants.h"
++#include "ui/base/metadata/metadata_impl_macros.h"
++
++ZephyrFolderHeaderView::ZephyrFolderHeaderView(
++    std::string folder_id,
++    ToggleCallback toggle_callback)
++    : views::LabelButton(
++          base::BindRepeating(&ZephyrFolderHeaderView::OnPressed,
++                              base::Unretained(this)),
++          std::u16string()),
++      folder_id_(std::move(folder_id)),
++      toggle_callback_(std::move(toggle_callback)) {
++  SetHorizontalAlignment(gfx::ALIGN_LEFT);
++  SetFocusBehavior(FocusBehavior::ALWAYS);
++}
++
++ZephyrFolderHeaderView::~ZephyrFolderHeaderView() = default;
++
++void ZephyrFolderHeaderView::Update(const std::u16string& title,
++                                    bool collapsed) {
++  collapsed_ = collapsed;
++  SetText((collapsed_ ? u"> " : u"v ") + title);
++}
++
++void ZephyrFolderHeaderView::OnPressed(const ui::Event& event) {
++  if (toggle_callback_) {
++    toggle_callback_.Run(folder_id_);
++  }
++}
++
++BEGIN_METADATA(ZephyrFolderHeaderView)
++END_METADATA
+--- a/chrome/browser/ui/views/tabs/vertical/vertical_tab_strip_controller.h
++++ b/chrome/browser/ui/views/tabs/vertical/vertical_tab_strip_controller.h
+@@ -56,6 +56,8 @@
+   views::Widget* ShowGroupEditorBubble(const tab_groups::TabGroupId& group_id,
+                                        views::View* anchor_view,
+                                        bool stop_context_menu_propagation);
+   bool IsCollapsed() const;
++  BrowserView* browser_view() const { return browser_view_; }
++  TabStripModel* tab_strip_model() const { return model_; }
+ 
+   TabContextMenuController* GetTabContextMenuController() {
+     return context_menu_controller_.get();

@@ -1,0 +1,319 @@
+--- a/chrome/browser/ui/views/tabs/vertical/vertical_tab_group_header_view.cc
++++ b/chrome/browser/ui/views/tabs/vertical/vertical_tab_group_header_view.cc
+@@ -19,19 +19,27 @@
+ #include "ui/base/mojom/menu_source_type.mojom-shared.h"
+ #include "ui/color/color_provider.h"
+ #include "ui/gfx/color_utils.h"
++#include "ui/gfx/geometry/insets.h"
+ #include "ui/gfx/geometry/rounded_corners_f.h"
+ #include "ui/views/background.h"
+ #include "ui/views/border.h"
+ #include "ui/views/controls/image_view.h"
+ #include "ui/views/controls/label.h"
++#include "ui/views/controls/textfield/textfield.h"
+ #include "ui/views/view.h"
+ #include "ui/views/view_class_properties.h"
+ #include "ui/views/widget/widget.h"
++#include "chrome/browser/ui/color/chrome_color_id.h"
+ 
+ namespace {
+-constexpr int kGroupHeaderCornerRadius = 8;
+-constexpr int kGroupHeaderHorizontalInset = 8;
++constexpr int kGroupHeaderCornerRadius = 10;
++constexpr int kGroupHeaderHorizontalInset = 10;
++constexpr int kGroupHeaderVerticalInset = 4;
+ constexpr int kIconSize = 16;
++constexpr int kIconSlotSize = 20;
++constexpr int kThemeChipSize = 16;
++constexpr int kThemeChipCornerRadius = 8;
++constexpr int kCollapseChevronSize = 14;
+ 
+ class VerticalTabGroupHeaderLabel : public views::Label {
+   METADATA_HEADER(VerticalTabGroupHeaderLabel, views::Label)
+@@ -50,13 +58,22 @@
+ VerticalTabGroupHeaderView::VerticalTabGroupHeaderView(
+     Delegate& delegate,
+     const tab_groups::TabGroupVisualData* tab_group_visual_data)
+-    : group_header_label_(
++    : icon_slot_(AddChildView(std::make_unique<views::View>())),
++      group_header_label_(
+           AddChildView(std::make_unique<VerticalTabGroupHeaderLabel>())),
++      theme_chip_(AddChildView(std::make_unique<views::View>())),
+       collapse_icon_(AddChildView(std::make_unique<views::ImageView>())),
+       delegate_(delegate) {
+   SetProperty(views::kElementIdentifierKey, kTabGroupHeaderElementId);
+ 
+-  SetInteriorMargin(gfx::Insets::VH(0, kGroupHeaderHorizontalInset));
++  SetInteriorMargin(
++      gfx::Insets::VH(kGroupHeaderVerticalInset, kGroupHeaderHorizontalInset));
++
++  icon_slot_->SetPreferredSize(gfx::Size(kIconSlotSize, kIconSlotSize));
++  theme_chip_->SetPreferredSize(gfx::Size(kThemeChipSize, kThemeChipSize));
++
++  rename_field_ = AddChildView(std::make_unique<views::Textfield>());
++  rename_field_->SetVisible(false);
+   group_header_label_->SetProperty(
+       views::kFlexBehaviorKey,
+       views::FlexSpecification(
+@@ -172,19 +189,44 @@
+     const tab_groups::TabGroupVisualData* tab_group_visual_data) {
+   group_header_label_->SetText(tab_group_visual_data->title());
+   if (GetColorProvider()) {
+-    SkColor background_color = GetColorProvider()->GetColor(
++    SkColor group_color = GetColorProvider()->GetColor(
+         GetTabGroupTabStripColorId(tab_group_visual_data->color(),
+                                    GetWidget()->ShouldPaintAsActive()));
+-    SkColor forground_color =
+-        color_utils::GetColorWithMaxContrast(background_color);
+-    group_header_label_->SetEnabledColor(forground_color);
++    SkColor header_bg =
++        GetColorProvider()->GetColor(kColorZephyrFolderHeaderBg);
++    group_header_label_->SetEnabledColor(
++        GetColorProvider()->GetColor(kColorSysOnSurface));
++    theme_chip_->SetBackground(
++        views::CreateRoundedRectBackground(group_color, kThemeChipCornerRadius));
+     collapse_icon_->SetImage(
+         ui::ImageModel::FromVectorIcon(tab_group_visual_data->is_collapsed()
+                                            ? kKeyboardArrowDownChromeRefreshIcon
+                                            : kKeyboardArrowUpChromeRefreshIcon,
+-                                       forground_color, kIconSize));
+-    SetBackground(views::CreateRoundedRectBackground(background_color,
+-                                                     kGroupHeaderCornerRadius));
++                                       GetColorProvider()->GetColor(
++                                           kColorSysOnSurfaceSubtle),
++                                       kCollapseChevronSize));
++    SetBackground(
++        views::CreateRoundedRectBackground(header_bg, kGroupHeaderCornerRadius));
++  }
++}
++
++void VerticalTabGroupHeaderView::UpdateEditModeAppearance(bool editing) {
++  is_editing_ = editing;
++  if (!GetColorProvider()) {
++    return;
++  }
++  if (editing) {
++    SetBackground(views::CreateRoundedRectBackground(
++        GetColorProvider()->GetColor(kColorZephyrFolderHeaderBgHover),
++        kGroupHeaderCornerRadius));
++    SetBorder(views::CreateRoundedRectBorder(
++        1, kGroupHeaderCornerRadius,
++        GetColorProvider()->GetColor(kColorSysOnSurfaceSubtle)));
++  } else {
++    SetBackground(views::CreateRoundedRectBackground(
++        GetColorProvider()->GetColor(kColorZephyrFolderHeaderBg),
++        kGroupHeaderCornerRadius));
++    SetBorder(nullptr);
+   }
+ }
+ 
+--- a/chrome/browser/ui/views/tabs/vertical/vertical_tab_group_header_view.h
++++ b/chrome/browser/ui/views/tabs/vertical/vertical_tab_group_header_view.h
+@@ -19,6 +19,7 @@
+ 
+ namespace views {
+ class ImageView;
++class Textfield;
+ class Label;
+ }  // namespace views
+ 
+@@ -65,6 +66,8 @@
+   void OnDataChanged(
+       const tab_groups::TabGroupVisualData* tab_group_visual_data);
+ 
++  void UpdateEditModeAppearance(bool editing);
++
+   base::CallbackListSubscription RegisterOnEditorBubbleOpened(
+       base::RepeatingClosure callback);
+   base::CallbackListSubscription RegisterOnEditorBubbleClosed(
+@@ -73,6 +76,11 @@
+   views::ImageView* collapse_icon_for_testing() { return collapse_icon_; }
+ 
+  private:
++  raw_ptr<views::View> icon_slot_ = nullptr;
++  raw_ptr<views::View> theme_chip_ = nullptr;
++  raw_ptr<views::Textfield> rename_field_ = nullptr;
++  bool is_editing_ = false;
++
+   const raw_ptr<views::Label> group_header_label_ = nullptr;
+   const raw_ptr<views::ImageView> collapse_icon_ = nullptr;
+   const raw_ref<Delegate> delegate_;
+--- a/chrome/browser/ui/views/tabs/vertical/vertical_tab_group_view.cc
++++ b/chrome/browser/ui/views/tabs/vertical/vertical_tab_group_view.cc
+@@ -22,6 +22,7 @@
+ #include "chrome/browser/ui/views/tabs/vertical/vertical_tab_view.h"
+ #include "components/saved_tab_groups/public/features.h"
+ #include "components/tabs/public/tab_collection_storage.h"
++#include "chrome/browser/ui/color/chrome_color_id.h"
+ #include "components/tabs/public/tab_group.h"
+ #include "components/tabs/public/tab_group_tab_collection.h"
+ #include "components/tabs/public/tab_interface.h"
+@@ -40,12 +41,17 @@
+ 
+ namespace {
+ constexpr int kTabVerticalPadding = 2;
+-constexpr int kGroupLineWidth = 2;
++constexpr int kGroupLineWidth = 3;
+ constexpr int kGroupLineCollapsedLeadingPadding = 2;
+-constexpr int kGroupLineCornerRadius = 4;
+-constexpr int kGroupHeaderHeight = 26;
+-constexpr int kGroupHeaderVerticalMargin = 4;
+-constexpr int kTabLeadingPadding = 10;
++constexpr int kGroupLineCornerRadius = 6;
++constexpr int kGroupHeaderHeight = 32;
++constexpr int kGroupHeaderVerticalMargin = 6;
++constexpr int kTabLeadingPadding = 14;
++constexpr int kContainerCornerRadius = 10;
++constexpr int kContainerInsetTop = 2;
++constexpr int kDropIndicatorHeight = 2;
++constexpr int kDropIndicatorCornerRadius = 1;
++constexpr int kDropIndicatorInset = 12;
+ 
+ const TabGroup* GetTabGroupFromNode(TabCollectionNode* node) {
+   CHECK(node);
+@@ -78,6 +84,26 @@
+       &TabCollectionAnimatingLayoutManager::RemoveChildViewForReparenting,
+       base::Unretained(&layout_manager_.get())));
+ 
++  // Container background: painted behind everything (inserted at index 0).
++  container_bg_ = AddChildViewAt(std::make_unique<views::View>(), 0);
++  container_bg_->SetPaintToLayer(true);
++  container_bg_->layer()->SetFillsBoundsOpaquely(false);
++  container_bg_->SetVisible(true);
++
++  // Drop indicator views: hidden by default.
++  drop_indicator_above_ = AddChildView(std::make_unique<views::View>());
++  drop_indicator_above_->SetPaintToLayer(true);
++  drop_indicator_above_->layer()->SetFillsBoundsOpaquely(false);
++  drop_indicator_above_->SetVisible(false);
++  drop_indicator_inside_ = AddChildView(std::make_unique<views::View>());
++  drop_indicator_inside_->SetPaintToLayer(true);
++  drop_indicator_inside_->layer()->SetFillsBoundsOpaquely(false);
++  drop_indicator_inside_->SetVisible(false);
++  drop_indicator_below_ = AddChildView(std::make_unique<views::View>());
++  drop_indicator_below_->SetPaintToLayer(true);
++  drop_indicator_below_->layer()->SetFillsBoundsOpaquely(false);
++  drop_indicator_below_->SetVisible(false);
++
+   node_destroyed_subscription_ =
+       collection_node_->RegisterWillDestroyCallback(base::BindOnce(
+           &VerticalTabGroupView::ResetCollectionNode, base::Unretained(this)));
+@@ -100,6 +126,21 @@
+ 
+ void VerticalTabGroupView::OnThemeChanged() {
+   views::View::OnThemeChanged();
++  const auto* cp = GetColorProvider();
++  if (cp) {
++    // Container background.
++    container_bg_->SetBackground(views::CreateRoundedRectBackground(
++        cp->GetColor(kColorZephyrFolderContainerBg), kContainerCornerRadius));
++    // Drop indicators.
++    auto pill_bg = views::CreateRoundedRectBackground(
++        cp->GetColor(kColorZephyrFolderDropIndicator),
++        kDropIndicatorCornerRadius);
++    drop_indicator_above_->SetBackground(pill_bg->Clone());
++    drop_indicator_below_->SetBackground(std::move(pill_bg));
++    drop_indicator_inside_->SetBackground(views::CreateRoundedRectBackground(
++        cp->GetColor(kColorZephyrFolderDropHighlight),
++        kContainerCornerRadius));
++  }
+   OnDataChanged();
+ }
+ 
+@@ -173,6 +214,30 @@
+   // Remove excess padding if needed.
+   height -= kTabVerticalPadding;
+ 
++  // Position container background spanning from below header to bottom.
++  const int container_top = header_bounds.bottom() + kContainerInsetTop;
++  gfx::Rect container_bounds(0, container_top,
++                              size_bounds.width().is_bounded()
++                                  ? size_bounds.width().value()
++                                  : width,
++                              std::max(0, height - container_top));
++  layouts.child_layouts.emplace_back(container_bg_.get(), true,
++                                     container_bounds);
++
++  // Position drop indicators.
++  const int indicator_width =
++      container_bounds.width() - 2 * kDropIndicatorInset;
++  layouts.child_layouts.emplace_back(
++      drop_indicator_above_.get(), drop_indicator_above_->GetVisible(),
++      gfx::Rect(kDropIndicatorInset, 0, indicator_width, kDropIndicatorHeight));
++  layouts.child_layouts.emplace_back(
++      drop_indicator_below_.get(), drop_indicator_below_->GetVisible(),
++      gfx::Rect(kDropIndicatorInset, height - kDropIndicatorHeight,
++                 indicator_width, kDropIndicatorHeight));
++  layouts.child_layouts.emplace_back(
++      drop_indicator_inside_.get(), drop_indicator_inside_->GetVisible(),
++      gfx::Rect(1, 1, container_bounds.width() - 2, height - 2));
++
+   if (!children.empty()) {
+     group_line_bounds.set_height(height - group_line_bounds.y());
+   }
+@@ -264,8 +329,10 @@
+     SkColor color = GetColorProvider()->GetColor(GetTabGroupTabStripColorId(
+         tab_group_visual_data_.color(), GetWidget()->ShouldPaintAsActive()));
+     group_line_->SetBackground(views::CreateRoundedRectBackground(
+-        color, gfx::RoundedCornersF(0, kGroupLineCornerRadius,
+-                                    kGroupLineCornerRadius, 0)));
++        color, gfx::RoundedCornersF(kGroupLineCornerRadius,
++                                    kGroupLineCornerRadius,
++                                    kGroupLineCornerRadius,
++                                    kGroupLineCornerRadius)));
+   }
+   InvalidateLayout();
+ }
+@@ -349,5 +416,19 @@
+   GetDragHandler().EndDrag(EndDragReason::kCancel);
+ }
+ 
++void VerticalTabGroupView::ShowDropIndicator(DropPosition position) {
++  drop_indicator_above_->SetVisible(position == DropPosition::kAbove);
++  drop_indicator_inside_->SetVisible(position == DropPosition::kInside);
++  drop_indicator_below_->SetVisible(position == DropPosition::kBelow);
++  InvalidateLayout();
++}
++
++void VerticalTabGroupView::HideDropIndicator() {
++  drop_indicator_above_->SetVisible(false);
++  drop_indicator_inside_->SetVisible(false);
++  drop_indicator_below_->SetVisible(false);
++  InvalidateLayout();
++}
++
+ BEGIN_METADATA(VerticalTabGroupView)
+ END_METADATA
+--- a/chrome/browser/ui/views/tabs/vertical/vertical_tab_group_view.h
++++ b/chrome/browser/ui/views/tabs/vertical/vertical_tab_group_view.h
+@@ -38,6 +38,8 @@
+   // views::View:
+   void OnThemeChanged() override;
+ 
++  enum class DropPosition { kNone, kAbove, kInside, kBelow };
++
+   // views::LayoutDelegate:
+   views::ProposedLayout CalculateProposedLayout(
+       const views::SizeBounds& size_bounds) const override;
+@@ -55,6 +57,9 @@
+ 
+   bool IsCollapsed() const;
+ 
++  void ShowDropIndicator(DropPosition position);
++  void HideDropIndicator();
++
+   const TabCollectionNode* collection_node() const { return collection_node_; }
+ 
+   VerticalTabGroupHeaderView* group_header() { return group_header_; }
+@@ -88,6 +93,11 @@
+   const raw_ptr<VerticalTabGroupHeaderView> group_header_ = nullptr;
+   const raw_ptr<views::View> group_line_ = nullptr;
+ 
++  raw_ptr<views::View> container_bg_ = nullptr;
++  raw_ptr<views::View> drop_indicator_above_ = nullptr;
++  raw_ptr<views::View> drop_indicator_inside_ = nullptr;
++  raw_ptr<views::View> drop_indicator_below_ = nullptr;
++
+   const raw_ref<TabCollectionAnimatingLayoutManager> layout_manager_;
+ };
+ 

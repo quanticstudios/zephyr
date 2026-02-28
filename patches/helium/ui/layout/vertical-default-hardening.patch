@@ -1,0 +1,38 @@
+--- a/chrome/browser/ui/helium/helium_layout_state_controller.h
++++ b/chrome/browser/ui/helium/helium_layout_state_controller.h
+@@ -46,6 +46,7 @@
+       StateChangedCallback callback);
+ 
+  private:
++  void NormalizeDefaultLayoutIfNeeded();
+   void NotifyStateChanged();
+ 
+   const raw_ptr<PrefService> pref_service_;
+--- a/chrome/browser/ui/helium/helium_layout_state_controller.cc
++++ b/chrome/browser/ui/helium/helium_layout_state_controller.cc
+@@ -24,6 +24,8 @@
+       base::BindRepeating(
+           &HeliumLayoutStateController::NotifyStateChanged,
+           base::Unretained(this)));
++
++  NormalizeDefaultLayoutIfNeeded();
+ }
+ 
+ HeliumLayoutStateController::~HeliumLayoutStateController() = default;
+@@ -68,3 +70,16 @@
+ void HeliumLayoutStateController::NotifyStateChanged() {
+   on_state_changed_callback_list_.Notify(this);
+ }
++
++void HeliumLayoutStateController::NormalizeDefaultLayoutIfNeeded() {
++  const PrefService::Preference* pref =
++      pref_service_->FindPreference(prefs::kHeliumLayout);
++  if (!pref || pref->IsManaged() || pref->HasUserSetting()) {
++    return;
++  }
++
++  const int vertical = std::to_underlying(HeliumLayoutType::kVertical);
++  if (pref_service_->GetInteger(prefs::kHeliumLayout) != vertical) {
++    pref_service_->SetInteger(prefs::kHeliumLayout, vertical);
++  }
++}

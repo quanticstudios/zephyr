@@ -1,0 +1,787 @@
+--- a/chrome/common/pref_names.h	2026-02-28 22:26:12.916630765 +0100
++++ b/chrome/common/pref_names.h	2026-02-28 22:28:21.307355631 +0100
+@@ -1332,6 +1332,14 @@
+ inline constexpr char kHeliumVerticalHoverExpandEnabled[] =
+     "helium.browser.vertical_hover_expand_enabled";
+ 
++// Integer schema version for Zephyr folder storage.
++inline constexpr char kZephyrFoldersSchemaVersion[] =
++    "helium.browser.zephyr_folders_schema_version";
++
++// Dictionary pref with Zephyr folder metadata and tab assignments.
++inline constexpr char kZephyrFoldersState[] =
++    "helium.browser.zephyr_folders_state";
++
+ // A boolean pref set to true if a Home button to open the Home pages should be
+ // visible on the toolbar.
+ inline constexpr char kShowHomeButton[] = "browser.show_home_button";
+--- a/chrome/browser/ui/tabs/tab_strip_prefs.cc	2026-02-28 22:26:12.918851170 +0100
++++ b/chrome/browser/ui/tabs/tab_strip_prefs.cc	2026-02-28 22:28:25.017241338 +0100
+@@ -46,6 +46,8 @@
+       kVerticalTabStripDefaultUncollapsedWidth);
+   registry->RegisterBooleanPref(prefs::kHeliumVerticalHoverExpandEnabled,
+                                 true);
++  registry->RegisterIntegerPref(prefs::kZephyrFoldersSchemaVersion, 0);
++  registry->RegisterDictionaryPref(prefs::kZephyrFoldersState);
+ }
+ 
+ TabSearchPosition GetTabSearchPosition(const Profile* profile) {
+--- a/chrome/browser/ui/tabs/BUILD.gn	2026-02-28 22:26:12.920985718 +0100
++++ b/chrome/browser/ui/tabs/BUILD.gn	2026-02-28 22:28:33.128979406 +0100
+@@ -216,6 +216,8 @@
+       "split_tab_menu_model.h",
+       "split_tab_swap_menu_model.h",
+       "tab_model.h",
++      "zephyr_folder_model.h",
++      "zephyr_folder_window_controller.h",
+     ]
+ 
+     deps = [ "//ui/base/unowned_user_data" ]
+@@ -254,6 +256,8 @@
+       "split_tab_menu_model.cc",
+       "split_tab_swap_menu_model.cc",
+       "tab_model.cc",
++      "zephyr_folder_model.cc",
++      "zephyr_folder_window_controller.cc",
+     ]
+ 
+     deps = [
+@@ -272,6 +276,7 @@
+       "//chrome/browser/ui/tabs/saved_tab_groups",
+       "//chrome/browser/ui/toasts",
+       "//components/commerce/core/product_specifications",
++      "//components/prefs",
+       "//components/saved_tab_groups/public",
+       "//components/tab_groups",
+     ]
+--- a/chrome/browser/ui/browser_window/public/browser_window_features.h	2026-02-28 22:26:12.922781685 +0100
++++ b/chrome/browser/ui/browser_window/public/browser_window_features.h	2026-02-28 22:28:38.045813335 +0100
+@@ -135,6 +135,7 @@
+ namespace tabs {
+ class TabDeclutterController;
+ class VerticalTabStripStateController;
++class ZephyrFolderWindowController;
+ }  // namespace tabs
+ 
+ namespace chrome {
+@@ -316,6 +317,10 @@
+     return tab_declutter_controller_.get();
+   }
+ 
++  tabs::ZephyrFolderWindowController* zephyr_folder_window_controller() {
++    return zephyr_folder_window_controller_.get();
++  }
++
+   tabs::GlicNudgeController* glic_nudge_controller() {
+     return glic_nudge_controller_.get();
+   }
+@@ -575,6 +580,9 @@
+   std::unique_ptr<tabs::VerticalTabStripStateController>
+       vertical_tab_strip_state_controller_;
+ 
++  std::unique_ptr<tabs::ZephyrFolderWindowController>
++      zephyr_folder_window_controller_;
++
+   std::unique_ptr<ProjectsPanelStateController>
+       projects_panel_state_controller_;
+ 
+--- a/chrome/browser/ui/browser_window/internal/browser_window_features.cc	2026-02-28 22:26:12.924721803 +0100
++++ b/chrome/browser/ui/browser_window/internal/browser_window_features.cc	2026-02-28 22:28:45.199562816 +0100
+@@ -74,6 +74,7 @@
+ #include "chrome/browser/ui/tabs/tab_list_bridge.h"
+ #include "chrome/browser/ui/tabs/tab_strip_api/tab_strip_service_mojo_handler.h"
+ #include "chrome/browser/ui/tabs/vertical_tab_strip_state_controller.h"
++#include "chrome/browser/ui/tabs/zephyr_folder_window_controller.h"
+ #include "chrome/browser/ui/toasts/toast_controller.h"
+ #include "chrome/browser/ui/toasts/toast_features.h"
+ #include "chrome/browser/ui/toasts/toast_service.h"
+@@ -328,6 +329,10 @@
+                   restored_state_uncollapsed_width);
+     }
+ 
++    zephyr_folder_window_controller_ =
++        std::make_unique<tabs::ZephyrFolderWindowController>(
++            browser, profile->GetPrefs(), browser->GetTabStripModel());
++
+     if (tabs::IsProjectsPanelFeatureEnabled()) {
+       projects_panel_state_controller_ =
+           GetUserDataFactory().CreateInstance<ProjectsPanelStateController>(
+--- /dev/null	2026-02-28 16:46:15.978699817 +0100
++++ b/chrome/browser/ui/tabs/zephyr_folder_model.h	2026-02-28 22:27:50.708442543 +0100
+@@ -0,0 +1,74 @@
++// Copyright 2026 The Chromium Authors
++// Use of this source code is governed by a BSD-style license that can be
++// found in the LICENSE file.
++
++#ifndef CHROME_BROWSER_UI_TABS_ZEPHYR_FOLDER_MODEL_H_
++#define CHROME_BROWSER_UI_TABS_ZEPHYR_FOLDER_MODEL_H_
++
++#include <cstdint>
++#include <optional>
++#include <set>
++#include <string>
++#include <vector>
++
++#include "base/callback_list.h"
++#include "base/memory/raw_ptr.h"
++
++class PrefService;
++class TabStripModel;
++
++namespace tabs {
++class TabInterface;
++
++class ZephyrFolderModel {
++ public:
++  static constexpr int kCurrentSchemaVersion = 1;
++
++  struct Folder {
++    std::string id;
++    std::u16string title;
++    bool collapsed = false;
++    std::string icon;
++    std::string theme;
++  };
++
++  explicit ZephyrFolderModel(PrefService* pref_service);
++  ZephyrFolderModel(const ZephyrFolderModel&) = delete;
++  ZephyrFolderModel& operator=(const ZephyrFolderModel&) = delete;
++  ~ZephyrFolderModel();
++
++  base::CallbackListSubscription RegisterOnChanged(
++      base::RepeatingClosure callback);
++
++  int GetSchemaVersion() const;
++  std::vector<Folder> GetFolders() const;
++  std::optional<Folder> GetFolderById(const std::string& folder_id) const;
++  std::optional<std::string> GetFolderForSessionId(int32_t session_id) const;
++
++  std::string CreateFolder(const std::u16string& title);
++  bool RenameFolder(const std::string& folder_id, const std::u16string& title);
++  bool SetFolderCollapsed(const std::string& folder_id, bool collapsed);
++
++  bool AssignSessionToFolder(int32_t session_id, const std::string& folder_id);
++  bool UnassignSession(int32_t session_id);
++  void CleanupAssignments(const std::set<int32_t>& active_session_ids);
++
++  void MaybeRunNativeGroupMigration(TabStripModel* tab_strip_model);
++
++ private:
++  std::string GenerateFolderId();
++  bool FolderExists(const std::string& folder_id) const;
++  void EnsureStateShape();
++  void NotifyChanged();
++
++  const raw_ptr<PrefService> pref_service_;
++  base::RepeatingClosureList on_changed_callback_list_;
++};
++
++std::u16string GetZephyrDefaultFolderTitle(int index);
++
++std::optional<int32_t> GetSessionIdForTab(const TabInterface* tab);
++
++}  // namespace tabs
++
++#endif  // CHROME_BROWSER_UI_TABS_ZEPHYR_FOLDER_MODEL_H_
+--- /dev/null	2026-02-28 16:46:15.978699817 +0100
++++ b/chrome/browser/ui/tabs/zephyr_folder_model.cc	2026-02-28 22:28:09.095704412 +0100
+@@ -0,0 +1,347 @@
++// Copyright 2026 The Chromium Authors
++// Use of this source code is governed by a BSD-style license that can be
++// found in the LICENSE file.
++
++#include "chrome/browser/ui/tabs/zephyr_folder_model.h"
++
++#include <algorithm>
++
++#include "base/check.h"
++#include "base/strings/string_number_conversions.h"
++#include "base/strings/utf_string_conversions.h"
++#include "chrome/browser/ui/tabs/tab_group_model.h"
++#include "chrome/browser/ui/tabs/tab_strip_model.h"
++#include "chrome/common/pref_names.h"
++#include "components/prefs/pref_service.h"
++#include "components/prefs/scoped_user_pref_update.h"
++#include "components/tab_groups/tab_group_id.h"
++#include "components/tabs/public/tab_handle_factory.h"
++#include "components/tabs/public/tab_group.h"
++#include "components/tabs/public/tab_interface.h"
++#include "ui/gfx/range/range.h"
++
++namespace tabs {
++namespace {
++
++constexpr char kStateNextFolderId[] = "next_folder_id";
++constexpr char kStateFolders[] = "folders";
++constexpr char kStateOrder[] = "order";
++constexpr char kStateAssignments[] = "assignments";
++
++constexpr char kFolderTitle[] = "title";
++constexpr char kFolderCollapsed[] = "collapsed";
++constexpr char kFolderIcon[] = "icon";
++constexpr char kFolderTheme[] = "theme";
++
++std::string SessionKey(int32_t session_id) {
++  return base::NumberToString(session_id);
++}
++
++std::u16string GetMigrationTitle(const std::u16string& group_title,
++                                 int fallback_index) {
++  if (!group_title.empty()) {
++    return group_title;
++  }
++  return GetZephyrDefaultFolderTitle(fallback_index);
++}
++
++}  // namespace
++
++ZephyrFolderModel::ZephyrFolderModel(PrefService* pref_service)
++    : pref_service_(pref_service) {
++  CHECK(pref_service_);
++  EnsureStateShape();
++}
++
++ZephyrFolderModel::~ZephyrFolderModel() = default;
++
++base::CallbackListSubscription ZephyrFolderModel::RegisterOnChanged(
++    base::RepeatingClosure callback) {
++  return on_changed_callback_list_.Add(std::move(callback));
++}
++
++int ZephyrFolderModel::GetSchemaVersion() const {
++  return pref_service_->GetInteger(prefs::kZephyrFoldersSchemaVersion);
++}
++
++std::vector<ZephyrFolderModel::Folder> ZephyrFolderModel::GetFolders() const {
++  std::vector<Folder> folders;
++  const base::Value::Dict& state =
++      pref_service_->GetDict(prefs::kZephyrFoldersState);
++  const base::Value::Dict* folders_dict = state.FindDict(kStateFolders);
++  const base::Value::List* order = state.FindList(kStateOrder);
++  if (!folders_dict || !order) {
++    return folders;
++  }
++
++  folders.reserve(order->size());
++  for (const base::Value& value : *order) {
++    const std::string* folder_id = value.GetIfString();
++    if (!folder_id) {
++      continue;
++    }
++    const base::Value::Dict* folder_dict = folders_dict->FindDict(*folder_id);
++    if (!folder_dict) {
++      continue;
++    }
++
++    Folder folder;
++    folder.id = *folder_id;
++    folder.title = base::UTF8ToUTF16(
++        folder_dict->FindString(kFolderTitle)
++            ? *folder_dict->FindString(kFolderTitle)
++            : "Folder");
++    folder.collapsed = folder_dict->FindBool(kFolderCollapsed).value_or(false);
++    folder.icon = folder_dict->FindString(kFolderIcon)
++                      ? *folder_dict->FindString(kFolderIcon)
++                      : "folder";
++    folder.theme = folder_dict->FindString(kFolderTheme)
++                       ? *folder_dict->FindString(kFolderTheme)
++                       : "default";
++    folders.push_back(std::move(folder));
++  }
++
++  return folders;
++}
++
++std::optional<ZephyrFolderModel::Folder> ZephyrFolderModel::GetFolderById(
++    const std::string& folder_id) const {
++  for (const Folder& folder : GetFolders()) {
++    if (folder.id == folder_id) {
++      return folder;
++    }
++  }
++  return std::nullopt;
++}
++
++std::optional<std::string> ZephyrFolderModel::GetFolderForSessionId(
++    int32_t session_id) const {
++  const base::Value::Dict& state =
++      pref_service_->GetDict(prefs::kZephyrFoldersState);
++  const base::Value::Dict* assignments = state.FindDict(kStateAssignments);
++  if (!assignments) {
++    return std::nullopt;
++  }
++
++  const std::string* folder_id = assignments->FindString(SessionKey(session_id));
++  if (!folder_id || !FolderExists(*folder_id)) {
++    return std::nullopt;
++  }
++  return *folder_id;
++}
++
++std::string ZephyrFolderModel::CreateFolder(const std::u16string& title) {
++  EnsureStateShape();
++
++  std::string folder_id = GenerateFolderId();
++  ScopedDictPrefUpdate update(pref_service_, prefs::kZephyrFoldersState);
++  base::Value::Dict& state = update.Get();
++  base::Value::Dict* folders_dict = state.FindDict(kStateFolders);
++  base::Value::List* order = state.FindList(kStateOrder);
++  CHECK(folders_dict);
++  CHECK(order);
++
++  base::Value::Dict folder;
++  folder.Set(kFolderTitle, base::UTF16ToUTF8(title));
++  folder.Set(kFolderCollapsed, false);
++  folder.Set(kFolderIcon, "folder");
++  folder.Set(kFolderTheme, "default");
++
++  folders_dict->Set(folder_id, std::move(folder));
++  order->Append(folder_id);
++
++  NotifyChanged();
++  return folder_id;
++}
++
++bool ZephyrFolderModel::RenameFolder(const std::string& folder_id,
++                                     const std::u16string& title) {
++  EnsureStateShape();
++  ScopedDictPrefUpdate update(pref_service_, prefs::kZephyrFoldersState);
++  base::Value::Dict* folders = update.Get().FindDict(kStateFolders);
++  if (!folders) {
++    return false;
++  }
++  base::Value::Dict* folder = folders->FindDict(folder_id);
++  if (!folder) {
++    return false;
++  }
++  folder->Set(kFolderTitle, base::UTF16ToUTF8(title));
++  NotifyChanged();
++  return true;
++}
++
++bool ZephyrFolderModel::SetFolderCollapsed(const std::string& folder_id,
++                                           bool collapsed) {
++  EnsureStateShape();
++  ScopedDictPrefUpdate update(pref_service_, prefs::kZephyrFoldersState);
++  base::Value::Dict* folders = update.Get().FindDict(kStateFolders);
++  if (!folders) {
++    return false;
++  }
++  base::Value::Dict* folder = folders->FindDict(folder_id);
++  if (!folder) {
++    return false;
++  }
++  if (folder->FindBool(kFolderCollapsed).value_or(false) == collapsed) {
++    return true;
++  }
++  folder->Set(kFolderCollapsed, collapsed);
++  NotifyChanged();
++  return true;
++}
++
++bool ZephyrFolderModel::AssignSessionToFolder(int32_t session_id,
++                                              const std::string& folder_id) {
++  if (!FolderExists(folder_id)) {
++    return false;
++  }
++
++  EnsureStateShape();
++  ScopedDictPrefUpdate update(pref_service_, prefs::kZephyrFoldersState);
++  base::Value::Dict* assignments = update.Get().FindDict(kStateAssignments);
++  if (!assignments) {
++    return false;
++  }
++  assignments->Set(SessionKey(session_id), folder_id);
++  NotifyChanged();
++  return true;
++}
++
++bool ZephyrFolderModel::UnassignSession(int32_t session_id) {
++  EnsureStateShape();
++  ScopedDictPrefUpdate update(pref_service_, prefs::kZephyrFoldersState);
++  base::Value::Dict* assignments = update.Get().FindDict(kStateAssignments);
++  if (!assignments) {
++    return false;
++  }
++  if (!assignments->Remove(SessionKey(session_id))) {
++    return false;
++  }
++  NotifyChanged();
++  return true;
++}
++
++void ZephyrFolderModel::CleanupAssignments(
++    const std::set<int32_t>& active_session_ids) {
++  EnsureStateShape();
++  ScopedDictPrefUpdate update(pref_service_, prefs::kZephyrFoldersState);
++  base::Value::Dict* assignments = update.Get().FindDict(kStateAssignments);
++  if (!assignments) {
++    return;
++  }
++
++  std::vector<std::string> keys_to_remove;
++  for (const auto [key, value] : *assignments) {
++    int session_id = 0;
++    if (!base::StringToInt(key, &session_id) ||
++        !active_session_ids.contains(session_id) || !value.is_string() ||
++        !FolderExists(*value.GetIfString())) {
++      keys_to_remove.push_back(key);
++    }
++  }
++
++  if (keys_to_remove.empty()) {
++    return;
++  }
++
++  for (const std::string& key : keys_to_remove) {
++    assignments->Remove(key);
++  }
++  NotifyChanged();
++}
++
++void ZephyrFolderModel::MaybeRunNativeGroupMigration(
++    TabStripModel* tab_strip_model) {
++  if (GetSchemaVersion() >= kCurrentSchemaVersion) {
++    return;
++  }
++
++  EnsureStateShape();
++  if (!tab_strip_model || !tab_strip_model->SupportsTabGroups() ||
++      !tab_strip_model->group_model()) {
++    pref_service_->SetInteger(prefs::kZephyrFoldersSchemaVersion,
++                              kCurrentSchemaVersion);
++    return;
++  }
++
++  std::vector<tab_groups::TabGroupId> groups =
++      tab_strip_model->group_model()->ListTabGroups();
++  int fallback_index = 1;
++
++  for (const tab_groups::TabGroupId& group_id : groups) {
++    const TabGroup* group = tab_strip_model->group_model()->GetTabGroup(group_id);
++    if (!group) {
++      continue;
++    }
++
++    std::string folder_id =
++        CreateFolder(GetMigrationTitle(group->visual_data()->title(),
++                                       fallback_index++));
++    SetFolderCollapsed(folder_id, group->visual_data()->is_collapsed());
++
++    std::vector<int> grouped_indices;
++    const gfx::Range range = group->ListTabs();
++    for (int index = range.start(); index < range.end(); ++index) {
++      tabs::TabInterface* tab = tab_strip_model->GetTabAtIndex(index);
++      if (!tab || tab->GetGroup() != group_id) {
++        continue;
++      }
++
++      if (std::optional<int32_t> session_id = GetSessionIdForTab(tab);
++          session_id.has_value()) {
++        AssignSessionToFolder(*session_id, folder_id);
++      }
++      grouped_indices.push_back(index);
++    }
++
++    if (!grouped_indices.empty()) {
++      tab_strip_model->RemoveFromGroup(grouped_indices);
++    }
++  }
++
++  pref_service_->SetInteger(prefs::kZephyrFoldersSchemaVersion,
++                            kCurrentSchemaVersion);
++}
++
++std::string ZephyrFolderModel::GenerateFolderId() {
++  ScopedDictPrefUpdate update(pref_service_, prefs::kZephyrFoldersState);
++  base::Value::Dict& state = update.Get();
++  int next_folder_id = state.FindInt(kStateNextFolderId).value_or(1);
++  state.Set(kStateNextFolderId, next_folder_id + 1);
++  return "folder-" + base::NumberToString(next_folder_id);
++}
++
++bool ZephyrFolderModel::FolderExists(const std::string& folder_id) const {
++  const base::Value::Dict& state =
++      pref_service_->GetDict(prefs::kZephyrFoldersState);
++  const base::Value::Dict* folders = state.FindDict(kStateFolders);
++  return folders && folders->contains(folder_id);
++}
++
++void ZephyrFolderModel::EnsureStateShape() {
++  ScopedDictPrefUpdate update(pref_service_, prefs::kZephyrFoldersState);
++  base::Value::Dict& state = update.Get();
++  if (!state.FindInt(kStateNextFolderId)) {
++    state.Set(kStateNextFolderId, 1);
++  }
++  if (!state.FindDict(kStateFolders)) {
++    state.Set(kStateFolders, base::Value::Dict());
++  }
++  if (!state.FindList(kStateOrder)) {
++    state.Set(kStateOrder, base::Value::List());
++  }
++  if (!state.FindDict(kStateAssignments)) {
++    state.Set(kStateAssignments, base::Value::Dict());
++  }
++}
++
++void ZephyrFolderModel::NotifyChanged() {
++  on_changed_callback_list_.Notify();
++}
++
++std::u16string GetZephyrDefaultFolderTitle(int index) {
++  return u"Folder " + base::NumberToString16(index);
++}
++
++std::optional<int32_t> GetSessionIdForTab(const TabInterface* tab) {
++  if (!tab) {
++    return std::nullopt;
++  }
++  return SessionMappedTabHandleFactory::GetInstance().GetSessionIdForHandle(
++      tab->GetHandle().raw_value());
++}
++
++}  // namespace tabs
+--- /dev/null	2026-02-28 16:46:15.978699817 +0100
++++ b/chrome/browser/ui/tabs/zephyr_folder_window_controller.h	2026-02-28 22:27:50.709505600 +0100
+@@ -0,0 +1,71 @@
++// Copyright 2026 The Chromium Authors
++// Use of this source code is governed by a BSD-style license that can be
++// found in the LICENSE file.
++
++#ifndef CHROME_BROWSER_UI_TABS_ZEPHYR_FOLDER_WINDOW_CONTROLLER_H_
++#define CHROME_BROWSER_UI_TABS_ZEPHYR_FOLDER_WINDOW_CONTROLLER_H_
++
++#include <cstdint>
++#include <optional>
++#include <set>
++#include <string>
++#include <vector>
++
++#include "base/memory/raw_ptr.h"
++#include "chrome/browser/ui/tabs/tab_strip_model_observer.h"
++#include "chrome/browser/ui/tabs/zephyr_folder_model.h"
++
++class BrowserWindowInterface;
++class PrefService;
++class TabStripModel;
++
++namespace tabs {
++class TabInterface;
++
++class ZephyrFolderWindowController : public TabStripModelObserver {
++ public:
++  ZephyrFolderWindowController(BrowserWindowInterface* browser_window,
++                               PrefService* pref_service,
++                               TabStripModel* tab_strip_model);
++  ZephyrFolderWindowController(const ZephyrFolderWindowController&) = delete;
++  ZephyrFolderWindowController& operator=(
++      const ZephyrFolderWindowController&) = delete;
++  ~ZephyrFolderWindowController() override;
++
++  ZephyrFolderModel* folder_model() { return &folder_model_; }
++  const ZephyrFolderModel* folder_model() const { return &folder_model_; }
++
++  std::vector<ZephyrFolderModel::Folder> GetFolders() const;
++  std::optional<std::string> GetFolderForTab(const TabInterface* tab) const;
++
++  std::string CreateFolderFromSelection(
++      int context_index,
++      const std::u16string& title = std::u16string());
++  bool MoveSelectionToFolder(int context_index, const std::string& folder_id);
++  bool RemoveSelectionFromFolder(int context_index);
++  bool ToggleFolderCollapsed(const std::string& folder_id);
++  bool RenameFolder(const std::string& folder_id, const std::u16string& title);
++
++  std::vector<int32_t> GetSessionIdsForSelection(int context_index) const;
++
++  // TabStripModelObserver:
++  void OnTabStripModelChanged(
++      TabStripModel* tab_strip_model,
++      const TabStripModelChange& change,
++      const TabStripSelectionChange& selection) override;
++  void OnTabPinnedStateChanged(TabInterface* tab, int model_index) override;
++  void OnTabGroupChanged(const TabGroupChange& change) override;
++
++ private:
++  std::vector<TabInterface*> GetTabsForSelection(int context_index) const;
++  std::set<int32_t> CollectActiveSessionIds() const;
++  std::u16string BuildDefaultFolderTitle() const;
++
++  const raw_ptr<BrowserWindowInterface> browser_window_;
++  const raw_ptr<TabStripModel> tab_strip_model_;
++  ZephyrFolderModel folder_model_;
++};
++
++}  // namespace tabs
++
++#endif  // CHROME_BROWSER_UI_TABS_ZEPHYR_FOLDER_WINDOW_CONTROLLER_H_
+--- /dev/null	2026-02-28 16:46:15.978699817 +0100
++++ b/chrome/browser/ui/tabs/zephyr_folder_window_controller.cc	2026-02-28 22:27:57.439991670 +0100
+@@ -0,0 +1,167 @@
++// Copyright 2026 The Chromium Authors
++// Use of this source code is governed by a BSD-style license that can be
++// found in the LICENSE file.
++
++#include "chrome/browser/ui/tabs/zephyr_folder_window_controller.h"
++
++#include <algorithm>
++
++#include "base/check.h"
++#include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
++#include "chrome/browser/ui/tabs/tab_strip_model.h"
++#include "components/tabs/public/tab_interface.h"
++#include "ui/base/models/list_selection_model.h"
++
++namespace tabs {
++
++ZephyrFolderWindowController::ZephyrFolderWindowController(
++    BrowserWindowInterface* browser_window,
++    PrefService* pref_service,
++    TabStripModel* tab_strip_model)
++    : browser_window_(browser_window),
++      tab_strip_model_(tab_strip_model),
++      folder_model_(pref_service) {
++  CHECK(browser_window_);
++  CHECK(tab_strip_model_);
++
++  tab_strip_model_->AddObserver(this);
++  folder_model_.MaybeRunNativeGroupMigration(tab_strip_model_);
++  folder_model_.CleanupAssignments(CollectActiveSessionIds());
++}
++
++ZephyrFolderWindowController::~ZephyrFolderWindowController() {
++  tab_strip_model_->RemoveObserver(this);
++}
++
++std::vector<ZephyrFolderModel::Folder>
++ZephyrFolderWindowController::GetFolders() const {
++  return folder_model_.GetFolders();
++}
++
++std::optional<std::string> ZephyrFolderWindowController::GetFolderForTab(
++    const TabInterface* tab) const {
++  std::optional<int32_t> session_id = GetSessionIdForTab(tab);
++  if (!session_id.has_value()) {
++    return std::nullopt;
++  }
++  return folder_model_.GetFolderForSessionId(*session_id);
++}
++
++std::string ZephyrFolderWindowController::CreateFolderFromSelection(
++    int context_index,
++    const std::u16string& title) {
++  const std::u16string resolved_title =
++      title.empty() ? BuildDefaultFolderTitle() : title;
++  const std::string folder_id = folder_model_.CreateFolder(resolved_title);
++  MoveSelectionToFolder(context_index, folder_id);
++  return folder_id;
++}
++
++bool ZephyrFolderWindowController::MoveSelectionToFolder(
++    int context_index,
++    const std::string& folder_id) {
++  bool changed = false;
++  for (int32_t session_id : GetSessionIdsForSelection(context_index)) {
++    changed = folder_model_.AssignSessionToFolder(session_id, folder_id) ||
++              changed;
++  }
++  return changed;
++}
++
++bool ZephyrFolderWindowController::RemoveSelectionFromFolder(int context_index) {
++  bool changed = false;
++  for (int32_t session_id : GetSessionIdsForSelection(context_index)) {
++    changed = folder_model_.UnassignSession(session_id) || changed;
++  }
++  return changed;
++}
++
++bool ZephyrFolderWindowController::ToggleFolderCollapsed(
++    const std::string& folder_id) {
++  std::optional<ZephyrFolderModel::Folder> folder =
++      folder_model_.GetFolderById(folder_id);
++  if (!folder.has_value()) {
++    return false;
++  }
++  return folder_model_.SetFolderCollapsed(folder_id, !folder->collapsed);
++}
++
++bool ZephyrFolderWindowController::RenameFolder(const std::string& folder_id,
++                                                const std::u16string& title) {
++  return folder_model_.RenameFolder(folder_id, title);
++}
++
++std::vector<int32_t> ZephyrFolderWindowController::GetSessionIdsForSelection(
++    int context_index) const {
++  std::vector<int32_t> ids;
++  for (TabInterface* tab : GetTabsForSelection(context_index)) {
++    std::optional<int32_t> session_id = GetSessionIdForTab(tab);
++    if (session_id.has_value()) {
++      ids.push_back(*session_id);
++    }
++  }
++  return ids;
++}
++
++void ZephyrFolderWindowController::OnTabStripModelChanged(
++    TabStripModel* tab_strip_model,
++    const TabStripModelChange& change,
++    const TabStripSelectionChange& selection) {
++  folder_model_.CleanupAssignments(CollectActiveSessionIds());
++}
++
++void ZephyrFolderWindowController::OnTabPinnedStateChanged(TabInterface* tab,
++                                                           int model_index) {
++  folder_model_.CleanupAssignments(CollectActiveSessionIds());
++}
++
++void ZephyrFolderWindowController::OnTabGroupChanged(
++    const TabGroupChange& change) {
++  folder_model_.CleanupAssignments(CollectActiveSessionIds());
++}
++
++std::vector<TabInterface*> ZephyrFolderWindowController::GetTabsForSelection(
++    int context_index) const {
++  std::vector<int> indices;
++  if (tab_strip_model_->ContainsIndex(context_index) &&
++      tab_strip_model_->IsTabSelected(context_index)) {
++    const ui::ListSelectionModel::SelectedIndices selected_indices =
++        tab_strip_model_->selection_model()
++            .GetListSelectionModel()
++            .selected_indices();
++    indices = std::vector<int>(selected_indices.begin(), selected_indices.end());
++  } else if (tab_strip_model_->ContainsIndex(context_index)) {
++    indices = {context_index};
++  } else if (tab_strip_model_->active_index() != TabStripModel::kNoTab) {
++    indices = {tab_strip_model_->active_index()};
++  }
++
++  std::vector<TabInterface*> tabs;
++  tabs.reserve(indices.size());
++  for (int index : indices) {
++    if (!tab_strip_model_->ContainsIndex(index)) {
++      continue;
++    }
++    tabs.push_back(tab_strip_model_->GetTabAtIndex(index));
++  }
++  return tabs;
++}
++
++std::set<int32_t> ZephyrFolderWindowController::CollectActiveSessionIds() const {
++  std::set<int32_t> session_ids;
++  for (int index = 0; index < tab_strip_model_->count(); ++index) {
++    std::optional<int32_t> session_id =
++        GetSessionIdForTab(tab_strip_model_->GetTabAtIndex(index));
++    if (session_id.has_value()) {
++      session_ids.insert(*session_id);
++    }
++  }
++  return session_ids;
++}
++
++std::u16string ZephyrFolderWindowController::BuildDefaultFolderTitle() const {
++  const int index = static_cast<int>(folder_model_.GetFolders().size()) + 1;
++  return GetZephyrDefaultFolderTitle(index);
++}
++
++}  // namespace tabs

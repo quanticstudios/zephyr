@@ -5,7 +5,8 @@
 -      return 30;
 +      return 36;
      case LayoutConstant::kVerticalTabMinWidth:
-       return 30;
+-      return 30;
++      return 36;
      case LayoutConstant::kVerticalTabStripUncollapsedPadding:
 -      return 6;
 +      return 10;
@@ -45,3 +46,25 @@
 +constexpr int kTopButtonPadding = 4;
 +constexpr int kCollapsedTopButtonPadding = 3;
  }  // namespace
+--- a/chrome/browser/ui/views/toolbar/toolbar_button.cc
++++ b/chrome/browser/ui/views/toolbar/toolbar_button.cc
+@@ -161,3 +161,2 @@ void ToolbarButton::ClearHighlight() {
+ int ToolbarButton::GetRoundedCornerRadius() const {
+-  return ChromeLayoutProvider::Get()->GetCornerRadiusMetric(
+-      views::Emphasis::kHigh, GetTargetSize());
++  return 10;
+ }
+--- a/chrome/browser/ui/views/toolbar/toolbar_icon_container_view.cc
++++ b/chrome/browser/ui/views/toolbar/toolbar_icon_container_view.cc
+@@ -47,2 +47,1 @@ void ToolbarIconContainerView::RoundRect
+-  const int radius = ChromeLayoutProvider::Get()->GetCornerRadiusMetric(
+-      views::Emphasis::kHigh, layer_.size());
++  const int radius = 10;
+   cc::PaintFlags flags;
+--- a/chrome/browser/ui/views/toolbar/toolbar_ink_drop_util.cc
++++ b/chrome/browser/ui/views/toolbar/toolbar_ink_drop_util.cc
+@@ -43,2 +43,1 @@ class ToolbarButtonHighlightPathGenerato
+-    const int radii = ChromeLayoutProvider::Get()->GetCornerRadiusMetric(
+-        views::Emphasis::kHigh, rect.size());
++    const int radii = 10;
+

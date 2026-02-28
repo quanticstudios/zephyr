@@ -1,0 +1,357 @@
+--- a/chrome/browser/ui/tabs/BUILD.gn
++++ b/chrome/browser/ui/tabs/BUILD.gn
+@@ -216,6 +216,8 @@
+       "split_tab_menu_model.h",
+       "split_tab_swap_menu_model.h",
+       "tab_model.h",
++      "zephyr_existing_folder_sub_menu_model.h",
++      "zephyr_folder_menu_commands.h",
+       "zephyr_folder_model.h",
+       "zephyr_folder_window_controller.h",
+     ]
+@@ -256,6 +258,7 @@
+       "split_tab_menu_model.cc",
+       "split_tab_swap_menu_model.cc",
+       "tab_model.cc",
++      "zephyr_existing_folder_sub_menu_model.cc",
+       "zephyr_folder_model.cc",
+       "zephyr_folder_window_controller.cc",
+     ]
+--- a/chrome/browser/ui/tabs/tab_menu_model.h
++++ b/chrome/browser/ui/tabs/tab_menu_model.h
+@@ -54,6 +54,7 @@
+       add_to_existing_comparison_table_submenu_;
+   std::unique_ptr<ui::SimpleMenuModel> swap_with_split_submenu_;
+   std::unique_ptr<ui::SimpleMenuModel> arrange_split_view_submenu_;
++  std::unique_ptr<ui::SimpleMenuModel> zephyr_move_to_folder_submenu_;
+   std::unique_ptr<ui::SimpleMenuModel> glic_tab_sub_menu_model_;
+ 
+   raw_ptr<TabMenuModelDelegate> tab_menu_model_delegate_;
+--- a/chrome/browser/ui/tabs/tab_menu_model.cc
++++ b/chrome/browser/ui/tabs/tab_menu_model.cc
+@@ -5,6 +5,7 @@
+ #include "chrome/browser/ui/tabs/tab_menu_model.h"
+ 
+ #include <memory>
++#include <optional>
+ 
+ #include "base/command_line.h"
+ #include "base/feature_list.h"
+@@ -32,6 +33,10 @@
+ #include "chrome/browser/ui/tabs/tab_strip_model_delegate.h"
+ #include "chrome/browser/ui/tabs/tab_utils.h"
+ #include "chrome/browser/ui/tabs/vertical_tab_strip_state_controller.h"
++#include "chrome/browser/ui/tabs/zephyr_existing_folder_sub_menu_model.h"
++#include "chrome/browser/ui/tabs/zephyr_folder_menu_commands.h"
++#include "chrome/browser/ui/tabs/zephyr_folder_model.h"
++#include "chrome/browser/ui/tabs/zephyr_folder_window_controller.h"
+ #include "chrome/browser/ui/ui_features.h"
+ #include "chrome/browser/ui/web_applications/web_app_tabbed_utils.h"
+ #include "chrome/browser/user_education/user_education_service.h"
+@@ -136,6 +141,13 @@
+       tab_strip->delegate()->GetBrowserWindowInterface());
+   bool showing_vertical_tabs =
+       controller && controller->ShouldDisplayVerticalTabs();
++  auto* folder_controller =
++      tab_strip->delegate()
++          ->GetBrowserWindowInterface()
++          ->GetFeatures()
++          .zephyr_folder_window_controller();
++  const bool use_zephyr_folders =
++      showing_vertical_tabs && folder_controller != nullptr;
+ 
+   if (showing_vertical_tabs) {
+     AddItemWithStringId(TabStripModel::CommandNewTabToRight,
+@@ -186,8 +198,38 @@
+                       UserEducationService::MaybeShowNewBadge(
+                           tab_strip->profile(), features::kSideBySide));
+ 
+-  if (ExistingTabGroupSubMenuModel::ShouldShowSubmenu(
+-          tab_strip, index, tab_menu_model_delegate_)) {
++  if (use_zephyr_folders) {
++    AddItem(tabs::kCommandZephyrFolderNewFromSelection,
++            u"New Folder from Selection");
++
++    const auto folders = folder_controller->GetFolders();
++    if (!folders.empty()) {
++      zephyr_move_to_folder_submenu_ =
++          std::make_unique<tabs::ZephyrExistingFolderSubMenuModel>(
++              tab_strip, index, folder_controller);
++      AddSubMenu(tabs::kCommandZephyrFolderMoveToExisting, u"Move to Folder",
++                 zephyr_move_to_folder_submenu_.get());
++    }
++
++    bool has_folder_assignment = false;
++    for (int selection : indices) {
++      const tabs::TabInterface* tab = tab_strip->GetTabAtIndex(selection);
++      std::optional<int32_t> session_id = tabs::GetSessionIdForTab(tab);
++      if (!session_id.has_value()) {
++        continue;
++      }
++      if (folder_controller->folder_model()->GetFolderForSessionId(
++              *session_id)) {
++        has_folder_assignment = true;
++        break;
++      }
++    }
++    if (has_folder_assignment) {
++      AddItem(tabs::kCommandZephyrFolderRemoveFromSelection,
++              u"Remove from Folder");
++    }
++  } else if (ExistingTabGroupSubMenuModel::ShouldShowSubmenu(
++                 tab_strip, index, tab_menu_model_delegate_)) {
+     // Create submenu with existing groups
+     add_to_existing_group_submenu_ =
+         std::make_unique<ExistingTabGroupSubMenuModel>(
+@@ -203,11 +245,13 @@
+     SetElementIdentifierAt(GetItemCount() - 1, kAddToNewGroupItemIdentifier);
+   }
+ 
+-  for (const auto& selection : indices) {
+-    if (tab_strip->GetTabGroupForTab(selection).has_value()) {
+-      AddItemWithStringId(TabStripModel::CommandRemoveFromGroup,
+-                          IDS_TAB_CXMENU_REMOVE_TAB_FROM_GROUP);
+-      break;
++  if (!use_zephyr_folders) {
++    for (const auto& selection : indices) {
++      if (tab_strip->GetTabGroupForTab(selection).has_value()) {
++        AddItemWithStringId(TabStripModel::CommandRemoveFromGroup,
++                            IDS_TAB_CXMENU_REMOVE_TAB_FROM_GROUP);
++        break;
++      }
+     }
+   }
+ 
+--- a/chrome/browser/ui/tabs/zephyr_folder_menu_commands.h
++++ b/chrome/browser/ui/tabs/zephyr_folder_menu_commands.h
+@@ -0,0 +1,17 @@
++// Copyright 2026 The Chromium Authors
++// Use of this source code is governed by a BSD-style license that can be
++// found in the LICENSE file.
++
++#ifndef CHROME_BROWSER_UI_TABS_ZEPHYR_FOLDER_MENU_COMMANDS_H_
++#define CHROME_BROWSER_UI_TABS_ZEPHYR_FOLDER_MENU_COMMANDS_H_
++
++namespace tabs {
++
++inline constexpr int kCommandZephyrFolderNewFromSelection = 49001;
++inline constexpr int kCommandZephyrFolderMoveToExisting = 49002;
++inline constexpr int kCommandZephyrFolderRemoveFromSelection = 49003;
++inline constexpr int kMinCommandZephyrFolderExisting = 49100;
++
++}  // namespace tabs
++
++#endif  // CHROME_BROWSER_UI_TABS_ZEPHYR_FOLDER_MENU_COMMANDS_H_
+--- a/chrome/browser/ui/tabs/zephyr_existing_folder_sub_menu_model.h
++++ b/chrome/browser/ui/tabs/zephyr_existing_folder_sub_menu_model.h
+@@ -0,0 +1,44 @@
++// Copyright 2026 The Chromium Authors
++// Use of this source code is governed by a BSD-style license that can be
++// found in the LICENSE file.
++
++#ifndef CHROME_BROWSER_UI_TABS_ZEPHYR_EXISTING_FOLDER_SUB_MENU_MODEL_H_
++#define CHROME_BROWSER_UI_TABS_ZEPHYR_EXISTING_FOLDER_SUB_MENU_MODEL_H_
++
++#include <map>
++#include <string>
++
++#include "base/memory/raw_ptr.h"
++#include "ui/menus/simple_menu_model.h"
++
++class TabStripModel;
++
++namespace tabs {
++class ZephyrFolderWindowController;
++
++class ZephyrExistingFolderSubMenuModel : public ui::SimpleMenuModel,
++                                         public ui::SimpleMenuModel::Delegate {
++ public:
++  ZephyrExistingFolderSubMenuModel(TabStripModel* tab_strip,
++                                   int context_index,
++                                   ZephyrFolderWindowController* folder_controller);
++  ZephyrExistingFolderSubMenuModel(const ZephyrExistingFolderSubMenuModel&) =
++      delete;
++  ZephyrExistingFolderSubMenuModel& operator=(
++      const ZephyrExistingFolderSubMenuModel&) = delete;
++  ~ZephyrExistingFolderSubMenuModel() override;
++
++  // ui::SimpleMenuModel::Delegate:
++  bool IsCommandIdEnabled(int command_id) const override;
++  void ExecuteCommand(int command_id, int event_flags) override;
++
++ private:
++  const raw_ptr<TabStripModel> tab_strip_;
++  const int context_index_;
++  const raw_ptr<ZephyrFolderWindowController> folder_controller_;
++  std::map<int, std::string> command_to_folder_id_;
++};
++
++}  // namespace tabs
++
++#endif  // CHROME_BROWSER_UI_TABS_ZEPHYR_EXISTING_FOLDER_SUB_MENU_MODEL_H_
+--- a/chrome/browser/ui/tabs/zephyr_existing_folder_sub_menu_model.cc
++++ b/chrome/browser/ui/tabs/zephyr_existing_folder_sub_menu_model.cc
+@@ -0,0 +1,68 @@
++// Copyright 2026 The Chromium Authors
++// Use of this source code is governed by a BSD-style license that can be
++// found in the LICENSE file.
++
++#include "chrome/browser/ui/tabs/zephyr_existing_folder_sub_menu_model.h"
++
++#include "chrome/browser/ui/tabs/tab_strip_model.h"
++#include "chrome/browser/ui/tabs/zephyr_folder_menu_commands.h"
++#include "chrome/browser/ui/tabs/zephyr_folder_window_controller.h"
++
++namespace tabs {
++
++ZephyrExistingFolderSubMenuModel::ZephyrExistingFolderSubMenuModel(
++    TabStripModel* tab_strip,
++    int context_index,
++    ZephyrFolderWindowController* folder_controller)
++    : ui::SimpleMenuModel(this),
++      tab_strip_(tab_strip),
++      context_index_(context_index),
++      folder_controller_(folder_controller) {
++  AddItem(kCommandZephyrFolderNewFromSelection, u"New Folder from Selection");
++
++  if (!folder_controller_) {
++    return;
++  }
++
++  AddSeparator(ui::NORMAL_SEPARATOR);
++  int command_id = kMinCommandZephyrFolderExisting;
++  for (const auto& folder : folder_controller_->GetFolders()) {
++    AddItem(command_id, folder.title);
++    command_to_folder_id_[command_id] = folder.id;
++    ++command_id;
++  }
++}
++
++ZephyrExistingFolderSubMenuModel::~ZephyrExistingFolderSubMenuModel() =
++    default;
++
++bool ZephyrExistingFolderSubMenuModel::IsCommandIdEnabled(int command_id) const {
++  if (!folder_controller_ || !tab_strip_) {
++    return false;
++  }
++  if (command_id == kCommandZephyrFolderNewFromSelection) {
++    return tab_strip_->ContainsIndex(context_index_);
++  }
++  return command_to_folder_id_.contains(command_id);
++}
++
++void ZephyrExistingFolderSubMenuModel::ExecuteCommand(int command_id,
++                                                      int event_flags) {
++  if (!folder_controller_) {
++    return;
++  }
++
++  if (command_id == kCommandZephyrFolderNewFromSelection) {
++    folder_controller_->CreateFolderFromSelection(context_index_);
++    return;
++  }
++
++  auto it = command_to_folder_id_.find(command_id);
++  if (it == command_to_folder_id_.end()) {
++    return;
++  }
++
++  folder_controller_->MoveSelectionToFolder(context_index_, it->second);
++}
++
++}  // namespace tabs
+--- a/chrome/browser/ui/views/tabs/vertical/vertical_tab_strip_controller.cc
++++ b/chrome/browser/ui/views/tabs/vertical/vertical_tab_strip_controller.cc
+@@ -14,6 +14,9 @@
+ #include "chrome/browser/ui/tabs/tab_strip_model.h"
+ #include "chrome/browser/ui/tabs/tab_strip_model_delegate.h"
+ #include "chrome/browser/ui/tabs/vertical_tab_strip_state_controller.h"
++#include "chrome/browser/ui/tabs/zephyr_folder_menu_commands.h"
++#include "chrome/browser/ui/tabs/zephyr_folder_model.h"
++#include "chrome/browser/ui/tabs/zephyr_folder_window_controller.h"
+ #include "chrome/browser/ui/views/event_utils.h"
+ #include "chrome/browser/ui/views/frame/browser_view.h"
+ #include "chrome/browser/ui/views/tabs/tab_context_menu_controller.h"
+@@ -201,6 +204,9 @@
+ 
+ void VerticalTabStripController::ShowGroupEditorBubble(
+     const TabCollectionNode* group_node) {
++  if (browser_view_->browser()->GetFeatures().zephyr_folder_window_controller()) {
++    return;
++  }
+   auto* group_header_view =
+       static_cast<VerticalTabGroupView*>(group_node->view())->group_header();
+   group_header_view->ShowContextMenuForViewImpl(
+@@ -211,6 +217,9 @@
+     const tab_groups::TabGroupId& group_id,
+     views::View* anchor_view,
+     bool stop_context_menu_propagation) {
++  if (browser_view_->browser()->GetFeatures().zephyr_folder_window_controller()) {
++    return nullptr;
++  }
+   return TabGroupEditorBubbleView::Show(
+       browser_view_->browser(), group_id,
+       /*anchor_view=*/anchor_view, /*anchor_rect=*/std::nullopt,
+@@ -232,6 +241,27 @@
+ bool VerticalTabStripController::IsContextMenuCommandEnabled(
+     int index,
+     TabStripModel::ContextMenuCommand command_id) {
++  auto* folder_controller =
++      browser_view_->browser()->GetFeatures().zephyr_folder_window_controller();
++  if (folder_controller) {
++    const int command_value = static_cast<int>(command_id);
++    if (command_value == tabs::kCommandZephyrFolderNewFromSelection) {
++      return model_->ContainsIndex(index);
++    }
++    if (command_value == tabs::kCommandZephyrFolderMoveToExisting) {
++      return !folder_controller->GetFolders().empty();
++    }
++    if (command_value == tabs::kCommandZephyrFolderRemoveFromSelection) {
++      for (int32_t session_id :
++           folder_controller->GetSessionIdsForSelection(index)) {
++        if (folder_controller->folder_model()->GetFolderForSessionId(
++                session_id)) {
++          return true;
++        }
++      }
++      return false;
++    }
++  }
+   return model_->IsContextMenuCommandEnabled(index, command_id);
+ }
+ 
+@@ -244,12 +274,34 @@
+     int index,
+     TabStripModel::ContextMenuCommand command_id,
+     int event_flags) {
++  auto* folder_controller =
++      browser_view_->browser()->GetFeatures().zephyr_folder_window_controller();
++  if (folder_controller) {
++    const int command_value = static_cast<int>(command_id);
++    if (command_value == tabs::kCommandZephyrFolderNewFromSelection) {
++      folder_controller->CreateFolderFromSelection(index);
++      return;
++    }
++    if (command_value == tabs::kCommandZephyrFolderRemoveFromSelection) {
++      folder_controller->RemoveSelectionFromFolder(index);
++      return;
++    }
++    if (command_value == tabs::kCommandZephyrFolderMoveToExisting) {
++      // Parent submenu item is never directly executed.
++      return;
++    }
++  }
+   model_->ExecuteContextMenuCommand(index, command_id);
+ }
+ 
+ bool VerticalTabStripController::GetContextMenuAccelerator(
+     int command_id,
+     ui::Accelerator* accelerator) {
++  if (command_id == tabs::kCommandZephyrFolderNewFromSelection ||
++      command_id == tabs::kCommandZephyrFolderMoveToExisting ||
++      command_id == tabs::kCommandZephyrFolderRemoveFromSelection) {
++    return false;
++  }
+ #if BUILDFLAG(IS_CHROMEOS)
+   auto* browser = browser_view_->browser();
+   auto* system_app = browser->app_controller()

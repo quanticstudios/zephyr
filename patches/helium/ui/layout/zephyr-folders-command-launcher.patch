@@ -1,0 +1,279 @@
+--- a/chrome/app/settings_strings.grdp
++++ b/chrome/app/settings_strings.grdp
+@@ -297,6 +297,18 @@
+   <message name="IDS_TAB_SEARCH_COMMAND_TOGGLE_SIDEBAR" desc="Command launcher label for toggling collapsed state of the vertical sidebar.">
+     Toggle sidebar
+   </message>
++  <message name="IDS_TAB_SEARCH_COMMAND_NEW_FOLDER_FROM_SELECTION" desc="Command launcher label for creating a new Zephyr folder from selected tabs.">
++    New folder from selection
++  </message>
++  <message name="IDS_TAB_SEARCH_COMMAND_MOVE_SELECTION_TO_FOLDER" desc="Command launcher label for moving selected tabs to a folder.">
++    Move selection to folder <ph name="FOLDER_TITLE">$1<ex>Work</ex></ph>
++  </message>
++  <message name="IDS_TAB_SEARCH_COMMAND_TOGGLE_FOLDER" desc="Command launcher label for toggling a folder collapsed state.">
++    Toggle folder <ph name="FOLDER_TITLE">$1<ex>Work</ex></ph>
++  </message>
++  <message name="IDS_TAB_SEARCH_COMMAND_RENAME_FOLDER" desc="Command launcher label for renaming a folder.">
++    Rename folder <ph name="FOLDER_TITLE">$1<ex>Work</ex></ph>
++  </message>
+   <message name="IDS_SETTINGS_SHOW_HOME_BUTTON" desc="Label for the checkbox which enables or disables showing the home button in the toolbar.">
+     Show home button
+   </message>
+--- a/chrome/browser/ui/webui/tab_search/tab_search_page_handler.h
++++ b/chrome/browser/ui/webui/tab_search/tab_search_page_handler.h
+@@ -8,6 +8,7 @@
+ #include <stdint.h>
+ 
+ #include "base/callback_list.h"
++#include "base/containers/flat_map.h"
+ #include "base/memory/raw_ptr.h"
+ #include "chrome/browser/ui/browser_tab_strip_tracker.h"
+ #include "chrome/browser/ui/browser_tab_strip_tracker_delegate.h"
+@@ -231,6 +232,18 @@
+     raw_ptr<tabs::TabInterface> tab;
+   };
+ 
++  struct ZephyrLauncherCommandPayload {
++    enum class Action {
++      kCreateFolderFromSelection,
++      kMoveSelectionToFolder,
++      kToggleFolderCollapsed,
++      kRenameFolder,
++    };
++
++    Action action = Action::kCreateFolderFromSelection;
++    std::string folder_id;
++  };
++
+   // Show the UI if all tabs are ready to be shown.
+   void MaybeShowUI();
+ 
+@@ -381,6 +394,8 @@
+   std::map<tabs::TabInterface*, std::unique_ptr<DuplicateTabsObserver>>
+       duplicate_tab_webcontents_observers_;
+ 
++  base::flat_map<int, ZephyrLauncherCommandPayload> zephyr_launcher_commands_;
++
+   base::ScopedObservation<TabOrganizationService, TabOrganizationObserver>
+       tab_organization_observation_{this};
+ 
+--- a/chrome/browser/ui/webui/tab_search/tab_search_page_handler.cc
++++ b/chrome/browser/ui/webui/tab_search/tab_search_page_handler.cc
+@@ -9,6 +9,7 @@
+ #include <algorithm>
+ #include <iterator>
+ #include <memory>
++#include <optional>
+ #include <set>
+ #include <string>
+ #include <utility>
+@@ -54,6 +55,8 @@
+ #include "chrome/browser/ui/tabs/tab_enums.h"
+ #include "chrome/browser/ui/tabs/tab_renderer_data.h"
+ #include "chrome/browser/ui/tabs/tab_strip_model_observer.h"
++#include "chrome/browser/ui/tabs/zephyr_folder_model.h"
++#include "chrome/browser/ui/tabs/zephyr_folder_window_controller.h"
+ #include "chrome/browser/ui/ui_features.h"
+ #include "chrome/browser/ui/webui/metrics_reporter/metrics_reporter.h"
+ #include "chrome/browser/ui/webui/tab_search/tab_search_prefs.h"
+@@ -92,6 +95,7 @@
+     IDC_OPTIONS,
+     IDC_TOGGLE_VERTICAL_TAB_STRIP_COLLAPSED,
+ };
++constexpr int kZephyrLauncherCommandMinId = 56000;
+ 
+ bool IsSupportedLauncherCommand(int command_id) {
+   return base::Contains(kLauncherCommandIds, command_id);
+@@ -124,6 +128,19 @@
+   }
+ }
+ 
++int GetSelectionContextIndex(const TabStripModel* tab_strip_model) {
++  if (!tab_strip_model) {
++    return TabStripModel::kNoTab;
++  }
++
++  const auto selected_indices =
++      tab_strip_model->selection_model().GetListSelectionModel().selected_indices();
++  if (!selected_indices.empty()) {
++    return *selected_indices.begin();
++  }
++  return tab_strip_model->active_index();
++}
++
+ std::string GetLastActiveElapsedText(
+     const base::TimeTicks& last_active_time_ticks) {
+   const base::TimeDelta elapsed =
+@@ -736,6 +753,7 @@
+ void TabSearchPageHandler::GetLauncherCommands(
+     GetLauncherCommandsCallback callback) {
+   std::vector<tab_search::mojom::LauncherCommandPtr> commands;
++  zephyr_launcher_commands_.clear();
+   if (!browser_) {
+     std::move(callback).Run(std::move(commands));
+     return;
+@@ -752,13 +770,135 @@
+     commands.push_back(std::move(command));
+   }
+ 
++  auto* folder_controller =
++      browser_->GetFeatures().zephyr_folder_window_controller();
++  if (folder_controller) {
++    int synthetic_id = kZephyrLauncherCommandMinId;
++
++    {
++      auto command = tab_search::mojom::LauncherCommand::New();
++      command->command_id = synthetic_id;
++      command->title = l10n_util::GetStringUTF8(
++          IDS_TAB_SEARCH_COMMAND_NEW_FOLDER_FROM_SELECTION);
++      command->enabled = true;
++      commands.push_back(std::move(command));
++
++      ZephyrLauncherCommandPayload payload;
++      payload.action =
++          ZephyrLauncherCommandPayload::Action::kCreateFolderFromSelection;
++      zephyr_launcher_commands_[synthetic_id] = std::move(payload);
++      ++synthetic_id;
++    }
++
++    for (const auto& folder : folder_controller->GetFolders()) {
++      {
++        auto command = tab_search::mojom::LauncherCommand::New();
++        command->command_id = synthetic_id;
++        command->title = l10n_util::GetStringFUTF8(
++            IDS_TAB_SEARCH_COMMAND_MOVE_SELECTION_TO_FOLDER, folder.title);
++        command->enabled = true;
++        commands.push_back(std::move(command));
++
++        ZephyrLauncherCommandPayload payload;
++        payload.action =
++            ZephyrLauncherCommandPayload::Action::kMoveSelectionToFolder;
++        payload.folder_id = folder.id;
++        zephyr_launcher_commands_[synthetic_id] = std::move(payload);
++        ++synthetic_id;
++      }
++
++      {
++        auto command = tab_search::mojom::LauncherCommand::New();
++        command->command_id = synthetic_id;
++        command->title = l10n_util::GetStringFUTF8(
++            IDS_TAB_SEARCH_COMMAND_TOGGLE_FOLDER, folder.title);
++        command->enabled = true;
++        commands.push_back(std::move(command));
++
++        ZephyrLauncherCommandPayload payload;
++        payload.action =
++            ZephyrLauncherCommandPayload::Action::kToggleFolderCollapsed;
++        payload.folder_id = folder.id;
++        zephyr_launcher_commands_[synthetic_id] = std::move(payload);
++        ++synthetic_id;
++      }
++
++      {
++        auto command = tab_search::mojom::LauncherCommand::New();
++        command->command_id = synthetic_id;
++        command->title = l10n_util::GetStringFUTF8(
++            IDS_TAB_SEARCH_COMMAND_RENAME_FOLDER, folder.title);
++        command->enabled = true;
++        commands.push_back(std::move(command));
++
++        ZephyrLauncherCommandPayload payload;
++        payload.action = ZephyrLauncherCommandPayload::Action::kRenameFolder;
++        payload.folder_id = folder.id;
++        zephyr_launcher_commands_[synthetic_id] = std::move(payload);
++        ++synthetic_id;
++      }
++    }
++  }
++
+   std::move(callback).Run(std::move(commands));
+ }
+ 
+ void TabSearchPageHandler::ExecuteLauncherCommand(
+     int32_t command_id,
+     ExecuteLauncherCommandCallback callback) {
+-  const bool executed = browser_ && IsSupportedLauncherCommand(command_id) &&
++  if (!browser_) {
++    std::move(callback).Run(false);
++    return;
++  }
++
++  auto synthetic_it = zephyr_launcher_commands_.find(command_id);
++  if (synthetic_it != zephyr_launcher_commands_.end()) {
++    auto* folder_controller =
++        browser_->GetFeatures().zephyr_folder_window_controller();
++    if (!folder_controller) {
++      std::move(callback).Run(false);
++      return;
++    }
++
++    const int context_index =
++        GetSelectionContextIndex(browser_->tab_strip_model());
++    if (context_index == TabStripModel::kNoTab) {
++      std::move(callback).Run(false);
++      return;
++    }
++
++    const ZephyrLauncherCommandPayload& payload = synthetic_it->second;
++    bool executed = false;
++    switch (payload.action) {
++      case ZephyrLauncherCommandPayload::Action::kCreateFolderFromSelection:
++        folder_controller->CreateFolderFromSelection(context_index);
++        executed = true;
++        break;
++      case ZephyrLauncherCommandPayload::Action::kMoveSelectionToFolder:
++        executed = folder_controller->MoveSelectionToFolder(context_index,
++                                                            payload.folder_id);
++        break;
++      case ZephyrLauncherCommandPayload::Action::kToggleFolderCollapsed:
++        executed = folder_controller->ToggleFolderCollapsed(payload.folder_id);
++        break;
++      case ZephyrLauncherCommandPayload::Action::kRenameFolder: {
++        std::optional<tabs::ZephyrFolderModel::Folder> folder =
++            folder_controller->folder_model()->GetFolderById(payload.folder_id);
++        if (!folder.has_value()) {
++          executed = false;
++          break;
++        }
++        std::u16string new_title = folder->title;
++        new_title += u" Renamed";
++        executed = folder_controller->RenameFolder(payload.folder_id, new_title);
++        break;
++      }
++    }
++    std::move(callback).Run(executed);
++    return;
++  }
++
++  const bool executed = IsSupportedLauncherCommand(command_id) &&
+                         chrome::SupportsCommand(browser_, command_id) &&
+                         chrome::ExecuteCommand(browser_, command_id);
+   std::move(callback).Run(executed);
+--- a/chrome/browser/resources/tab_search/command_launcher_page.ts
++++ b/chrome/browser/resources/tab_search/command_launcher_page.ts
+@@ -135,6 +135,25 @@
+     aliases.add('sidebar');
+     aliases.add('toggle sidebar');
+   }
++  if (title.includes('folder')) {
++    aliases.add('folder');
++    aliases.add('group');
++  }
++  if (title.includes('new folder')) {
++    aliases.add('create folder');
++    aliases.add('new group');
++  }
++  if (title.includes('move') && title.includes('folder')) {
++    aliases.add('move to folder');
++    aliases.add('organize tabs');
++  }
++  if (title.includes('toggle folder')) {
++    aliases.add('collapse folder');
++    aliases.add('expand folder');
++  }
++  if (title.includes('rename folder')) {
++    aliases.add('rename');
++  }
+ 
+   return [...aliases];
+ }

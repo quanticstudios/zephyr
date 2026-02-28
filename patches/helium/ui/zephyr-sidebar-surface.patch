@@ -1,6 +1,6 @@
 --- a/chrome/browser/ui/color/chrome_color_id.h
 +++ b/chrome/browser/ui/color/chrome_color_id.h
-@@ -0,2 +0,7 @@
+@@ -0,2 +0,14 @@
      E_CPONLY(kColorTabStrokeFrameActive) \
      E_CPONLY(kColorTabStrokeFrameInactive) \
 +    /* Zephyr sidebar surface */ \
@@ -8,9 +8,16 @@
 +    E_CPONLY(kColorZephyrSidebarSurfaceInactive) \
 +    E_CPONLY(kColorZephyrSidebarTabHover) \
 +    E_CPONLY(kColorZephyrSidebarTabSelected) \
++    /* Zephyr folder visuals */ \
++    E_CPONLY(kColorZephyrFolderHeaderBg) \
++    E_CPONLY(kColorZephyrFolderHeaderBgHover) \
++    E_CPONLY(kColorZephyrFolderContainerBg) \
++    E_CPONLY(kColorZephyrFolderGroupLine) \
++    E_CPONLY(kColorZephyrFolderDropIndicator) \
++    E_CPONLY(kColorZephyrFolderDropHighlight) \
 --- a/chrome/browser/ui/color/chrome_color_mixer.cc
 +++ b/chrome/browser/ui/color/chrome_color_mixer.cc
-@@ -0,0 +0,14 @@ void AddChromeColorMixer(ui::ColorProvid
+@@ -0,0 +0,31 @@ void AddChromeColorMixer(ui::ColorProvid
 +  // Zephyr sidebar surface colors.
 +  // Sidebar is 88% frame color + 12% neutral reference for a subtle warm lift.
 +  mixer[kColorZephyrSidebarSurface] = dark_mode
@@ -24,6 +31,23 @@
 +      AlphaBlend({SK_ColorWHITE}, {kColorZephyrSidebarSurface}, 0x14);
 +  mixer[kColorZephyrSidebarTabSelected] =
 +      AlphaBlend({SK_ColorWHITE}, {kColorZephyrSidebarSurface}, 0x26);
++
++  // Zephyr folder visual colors.
++  // Folder header: 5% white lift over sidebar surface.
++  mixer[kColorZephyrFolderHeaderBg] =
++      AlphaBlend({SK_ColorWHITE}, {kColorZephyrSidebarSurface}, 0x0C);
++  mixer[kColorZephyrFolderHeaderBgHover] =
++      AlphaBlend({SK_ColorWHITE}, {kColorZephyrSidebarSurface}, 0x1A);
++  // Folder container: subtle inset (3% black overlay).
++  mixer[kColorZephyrFolderContainerBg] =
++      AlphaBlend({SK_ColorBLACK}, {kColorZephyrSidebarSurface}, 0x08);
++  // Fallback group line color (views use per-group theme color normally).
++  mixer[kColorZephyrFolderGroupLine] = {kColorRefPrimary60};
++  // Drop indicator: accent pill.
++  mixer[kColorZephyrFolderDropIndicator] = {kColorRefPrimary60};
++  // Drop highlight: translucent overlay for "inside folder" state.
++  mixer[kColorZephyrFolderDropHighlight] =
++      AlphaBlend({kColorRefPrimary60}, {kColorZephyrSidebarSurface}, 0x30);
 +
 --- a/chrome/browser/ui/views/frame/vertical_tab_strip_region_view.cc
 +++ b/chrome/browser/ui/views/frame/vertical_tab_strip_region_view.cc
