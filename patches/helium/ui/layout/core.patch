@@ -396,7 +396,7 @@
 --- /dev/null
 +++ b/chrome/browser/ui/helium/helium_layout_state_controller.h
 @@ -0,0 +1,59 @@
-+// Copyright 2026 The Helium Authors
++// Copyright 2026 The Zephyr Authors
 +// You can use, redistribute, and/or modify this source code under
 +// the terms of the GPL-3.0 license that can be found in the LICENSE file.
 +
@@ -458,7 +458,7 @@
 --- /dev/null
 +++ b/chrome/browser/ui/helium/helium_layout_state_controller.cc
 @@ -0,0 +1,70 @@
-+// Copyright 2026 The Helium Authors
++// Copyright 2026 The Zephyr Authors
 +// You can use, redistribute, and/or modify this source code under
 +// the terms of the GPL-3.0 license that can be found in the LICENSE file.
 +

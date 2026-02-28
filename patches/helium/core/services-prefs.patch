@@ -268,7 +268,7 @@
 --- /dev/null
 +++ b/chrome/browser/resources/settings/privacy_page/services_page.ts
 @@ -0,0 +1,105 @@
-+// Copyright 2025 The Helium Authors
++// Copyright 2025 The Zephyr Authors
 +// You can use, redistribute, and/or modify this source code under
 +// the terms of the GPL-3.0 license that can be found in the LICENSE file.
 +
@@ -441,7 +441,7 @@
 --- /dev/null
 +++ b/components/helium_services/BUILD.gn
 @@ -0,0 +1,22 @@
-+# Copyright 2025 The Helium Authors
++# Copyright 2025 The Zephyr Authors
 +# You can use, redistribute, and/or modify this source code under
 +# the terms of the GPL-3.0 license that can be found in the LICENSE file.
 +
@@ -466,7 +466,7 @@
 --- /dev/null
 +++ b/components/helium_services/helium_services_helpers.cc
 @@ -0,0 +1,67 @@
-+// Copyright 2025 The Helium Authors
++// Copyright 2025 The Zephyr Authors
 +// You can use, redistribute, and/or modify this source code under
 +// the terms of the GPL-3.0 license that can be found in the LICENSE file.
 +
@@ -536,7 +536,7 @@
 --- /dev/null
 +++ b/components/helium_services/helium_services_helpers.h
 @@ -0,0 +1,30 @@
-+// Copyright 2025 The Helium Authors
++// Copyright 2025 The Zephyr Authors
 +// You can use, redistribute, and/or modify this source code under
 +// the terms of the GPL-3.0 license that can be found in the LICENSE file.
 +
@@ -569,7 +569,7 @@
 --- /dev/null
 +++ b/components/helium_services/pref_names.h
 @@ -0,0 +1,24 @@
-+// Copyright 2025 The Helium Authors
++// Copyright 2025 The Zephyr Authors
 +// You can use, redistribute, and/or modify this source code under
 +// the terms of the GPL-3.0 license that can be found in the LICENSE file.
 +
@@ -596,7 +596,7 @@
 --- /dev/null
 +++ b/chrome/browser/resources/settings/privacy_page/changelog_proxy.ts
 @@ -0,0 +1,40 @@
-+// Copyright 2025 The Helium Authors
++// Copyright 2025 The Zephyr Authors
 +// You can use, redistribute, and/or modify this source code under
 +// the terms of the GPL-3.0 license that can be found in the LICENSE file.
 +
@@ -639,7 +639,7 @@
 --- /dev/null
 +++ b/chrome/browser/ui/webui/settings/services_schema_handler.h
 @@ -0,0 +1,36 @@
-+// Copyright 2025 The Helium Authors
++// Copyright 2025 The Zephyr Authors
 +// You can use, redistribute, and/or modify this source code under
 +// the terms of the GPL-3.0 license that can be found in the LICENSE file.
 +
@@ -678,7 +678,7 @@
 --- /dev/null
 +++ b/components/helium_services/schema.cc
 @@ -0,0 +1,40 @@
-+// Copyright 2025 The Helium Authors
++// Copyright 2025 The Zephyr Authors
 +// You can use, redistribute, and/or modify this source code under
 +// the terms of the GPL-3.0 license that can be found in the LICENSE file.
 +
@@ -721,7 +721,7 @@
 --- /dev/null
 +++ b/components/helium_services/schema.h
 @@ -0,0 +1,30 @@
-+// Copyright 2025 The Helium Authors
++// Copyright 2025 The Zephyr Authors
 +// You can use, redistribute, and/or modify this source code under
 +// the terms of the GPL-3.0 license that can be found in the LICENSE file.
 +
@@ -765,7 +765,7 @@
 --- /dev/null
 +++ b/chrome/browser/ui/webui/settings/services_schema_handler.cc
 @@ -0,0 +1,58 @@
-+// Copyright 2025 The Helium Authors
++// Copyright 2025 The Zephyr Authors
 +// You can use, redistribute, and/or modify this source code under
 +// the terms of the GPL-3.0 license that can be found in the LICENSE file.
 +
