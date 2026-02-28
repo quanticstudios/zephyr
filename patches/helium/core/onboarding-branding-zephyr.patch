@@ -1,0 +1,161 @@
+--- a/components/helium_onboarding/src/lib/strings.ts	1970-01-01 01:00:00.000000000 +0100
++++ b/components/helium_onboarding/src/lib/strings.ts	2026-02-28 20:53:10.518343344 +0100
+@@ -9,44 +9,44 @@
+         letsGo: "Let's go!"
+     },
+     welcome: {
+-        greeting: "Meet Helium",
++        greeting: "Meet Zephyr",
+         body: "Configure your browser just the way you want it or use\nthe default preset with best privacy and comfort.",
+         terms_note: "By continuing, you agree to the",
+         terms_privacy: "privacy policy",
+         terms_and: "and",
+         terms_use: "terms of use",
+-        footer: "You can skip setup and come back later, but Helium services won't work without it.",
++        footer: "You can skip setup and come back later, but Zephyr services won't work without it.",
+     },
+     finish: {
+         title: "Ready to browse?",
+-        body: "The setup is complete, thank you for choosing Helium.\nTime to enjoy the Internet again.",
++        body: "The setup is complete, thank you for choosing Zephyr.\nTime to enjoy the Internet again.",
+     },
+     services: {
+-        title: "Helium services",
++        title: "Zephyr services",
+         subtitle: "Services are not active until you consent to using them.\nChanges will be applied after you go to the next page.",
+ 
+-        connection_title: "Allow connecting to Helium services",
+-        connection_desc: "Helium services provide additional functionality, such as: extension downloads, native !bangs, filter list updates, and browser updates. When disabled, none of these features will work, but Helium will not make any web requests.",
++        connection_title: "Allow connecting to Zephyr services",
++        connection_desc: "Zephyr services provide additional functionality, such as: extension downloads, native !bangs, filter list updates, and browser updates. When disabled, none of these features will work, but Zephyr will not make any web requests.",
+ 
+         bangs_title: "Allow downloading the !bangs list",
+-        bangs_desc: "Helium will fetch a list of bangs that help you browse the Internet faster, such as !w or !gh. When disabled, bangs will not work.",
++        bangs_desc: "Zephyr will fetch a list of bangs that help you browse the Internet faster, such as !w or !gh. When disabled, bangs will not work.",
+ 
+         extensions_title: "Proxy extension downloads and updates",
+-        extensions_desc: "When enabled, Helium will proxy extension downloads and updates to protect your privacy. When disabled, downloading and updating extensions will not work.",
++        extensions_desc: "When enabled, Zephyr will proxy extension downloads and updates to protect your privacy. When disabled, downloading and updating extensions will not work.",
+ 
+         ublock_title: "Allow downloading filter lists for uBlock Origin",
+-        ublock_desc: "Helium will fetch fresh filter lists for uBlock Origin. All requests to lists are proxied to protect your privacy. When disabled, default filter lists will be loaded from local storage, which are only updated along with Helium. Optional filter lists will be requested without proxying.",
++        ublock_desc: "Zephyr will fetch fresh filter lists for uBlock Origin. All requests to lists are proxied to protect your privacy. When disabled, default filter lists will be loaded from local storage, which are only updated along with Zephyr. Optional filter lists will be requested without proxying.",
+ 
+         autoupdates_title: "Allow automatic browser and component updates",
+-        autoupdates_desc: "Helium will automatically download and install browser and component updates as they become available. We recommend keeping this setting enabled to ensure you get the latest features and security updates.",
+-        autoupdates_linux: "\n\nAutomatic browser updates are not available on Linux yet, but component updates are. For now, please use external software to keep Helium's AppImage up-to-date. We already provide .zsync files along with releases.",
+-        autoupdates_windows: "\n\nAutomatic browser updates are not available on Windows yet, but component updates are. For now, please use external software or install updates manually to keep Helium up-to-date.",
++        autoupdates_desc: "Zephyr will automatically download and install browser and component updates as they become available. We recommend keeping this setting enabled to ensure you get the latest features and security updates.",
++        autoupdates_linux: "\n\nAutomatic browser updates are not available on Linux yet, but component updates are. For now, please use external software to keep Zephyr's AppImage up-to-date. We already provide .zsync files along with releases.",
++        autoupdates_windows: "\n\nAutomatic browser updates are not available on Windows yet, but component updates are. For now, please use external software or install updates manually to keep Zephyr up-to-date.",
+ 
+         spellcheck_title: "Allow downloading dictionary files for spell checking",
+-        spellcheck_desc: "Helium will fetch dictionary files used for spell checking when requested. When disabled, spell checking will not work.",
++        spellcheck_desc: "Zephyr will fetch dictionary files used for spell checking when requested. When disabled, spell checking will not work.",
+ 
+-        instance_title: "Use your own instance of Helium services",
+-        instance_desc: "You can host your own instance of Helium services and use it in your browser instead of the pre-hosted server. If you have one, you can set it in Helium settings.",
++        instance_title: "Use your own instance of Zephyr services",
++        instance_desc: "You can host your own instance of Zephyr services and use it in your browser instead of the pre-hosted server. If you have one, you can set it in Zephyr settings.",
+     },
+     search: {
+         title: "Default search engine",
+@@ -56,7 +56,7 @@
+         private: "A privacy-first search engine which\ndoesn't profile or track you.",
+         small: "Transparent, but not privacy-focused.\nOffers better privacy than mainstream\nsearch engines.",
+         mainstream: "A mainstream search engine which\ncollects extensive personal data.",
+-        custom: "A custom search engine. Its privacy\nwasn't verified by Helium.",
++        custom: "A custom search engine. Its privacy\nwasn't verified by Zephyr.",
+     } satisfies Record<SearchCategory, string>,
+     searchEngines: {
+         duckduckgo: "Privacy-focused. Relies on Bing results but promises to never track or profile you.",
+@@ -67,12 +67,12 @@
+         google: "It's Google. It dominates the search market, collects extensive personal data, and profiles you."
+     } satisfies Record<SearchEngineName, string>,
+     defaultBrowser: {
+-        title: "Ready to switch to Helium?",
+-        subtitle: "Better privacy, speed, and comfort. All in one click.\nLet's make links open in Helium by default.",
++        title: "Ready to switch to Zephyr?",
++        subtitle: "Better privacy, speed, and comfort. All in one click.\nLet's make links open in Zephyr by default.",
+         yes: "Yes",
+         no: "No",
+-        yes_desc: "Make Helium my default browser.",
+-        no_desc: "Just trying Helium for now."
++        yes_desc: "Make Zephyr my default browser.",
++        no_desc: "Just trying Zephyr for now."
+     },
+     dataImport: {
+         title: "Take your stuff with you",
+--- a/components/helium_onboarding/src/pages/Welcome.svelte	1970-01-01 01:00:00.000000000 +0100
++++ b/components/helium_onboarding/src/pages/Welcome.svelte	2026-02-28 20:53:14.898251481 +0100
+@@ -18,8 +18,8 @@
+ 
+     const visible = $derived($currentPage === "Welcome");
+ 
+-    const privacyUrl = "https://helium.computer/privacy";
+-    const termsUrl = "https://helium.computer/terms";
++    const privacyUrl = "https://github.com/quanticstudios/zephyr/blob/main/FORK_NOTICE.md";
++    const termsUrl = "https://github.com/quanticstudios/zephyr/blob/main/LICENSE";
+ </script>
+ 
+ <div
+--- a/components/helium_onboarding/src/icons/HeliumLogo.svelte	1970-01-01 01:00:00.000000000 +0100
++++ b/components/helium_onboarding/src/icons/HeliumLogo.svelte	2026-02-28 20:53:31.940619046 +0100
+@@ -1 +1,6 @@
+-<svg width="508" height="508" viewBox="0 0 508 508" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="238" width="32" height="508" rx="16" fill="white"/><rect x="18.291" y="40.6953" width="32" height="635" rx="16" transform="rotate(-45 18.291 40.6953)" fill="white"/><rect x="467.305" y="18.0664" width="32" height="635" rx="16" transform="rotate(45 467.305 18.0664)" fill="white"/><rect x="508" y="238" width="32" height="508" rx="16" transform="rotate(90 508 238)" fill="white"/></svg>
+\ No newline at end of file
++<svg width="248" height="248" viewBox="0 0 248 248" fill="none" xmlns="http://www.w3.org/2000/svg">
++  <path d="M124 236C185.856 236 236 185.856 236 124C236 62.1441 185.856 12 124 12C62.1441 12 12 62.1441 12 124C12 185.856 62.1441 236 124 236Z" stroke="#F8FBFF" stroke-width="24"/>
++  <path d="M124 12C172 12 212 52 212 100C212 148 172 188 124 188" stroke="#F8FBFF" stroke-width="24" stroke-linecap="round" stroke-linejoin="round"/>
++  <path d="M124 236C76 236 36 196 36 148C36 100 76 60 124 60" stroke="#F8FBFF" stroke-width="24" stroke-linecap="round" stroke-linejoin="round"/>
++  <rect x="108" y="108" width="32" height="32" rx="16" fill="#F8FBFF"/>
++</svg>
+--- a/components/helium_onboarding/src/app.css	1970-01-01 01:00:00.000000000 +0100
++++ b/components/helium_onboarding/src/app.css	2026-02-28 20:53:42.203671211 +0100
+@@ -16,11 +16,11 @@
+     --white: #ffffff;
+     --black: #000000;
+ 
+-    --helium-gradient-start-rgb: 21, 38, 113;
++    --helium-gradient-start-rgb: 35, 32, 70;
+     --helium-gradient-start: rgb(var(--helium-gradient-start-rgb));
+-    --helium-gradient-mid-rgb: 27, 44, 120;
++    --helium-gradient-mid-rgb: 78, 74, 134;
+     --helium-gradient-mid: rgb(var(--helium-gradient-mid-rgb));
+-    --helium-gradient-end-rgb: 86, 105, 189;
++    --helium-gradient-end-rgb: 212, 160, 82;
+     --helium-gradient-end: rgb(var(--helium-gradient-end-rgb));
+ 
+     --helium-gradient: linear-gradient(
+@@ -30,13 +30,13 @@
+         var(--helium-gradient-end) 100%
+     );
+ 
+-    --helium-elevated: #afbeff;
+-    --helium-elevated-10: rgba(175, 190, 255, 0.1);
+-    --helium-elevated-20: rgba(175, 190, 255, 0.2);
+-    --helium-elevated-25: rgba(175, 190, 255, 0.25);
+-    --helium-elevated-30: rgba(175, 190, 255, 0.3);
+-    --helium-elevated-40: rgba(175, 190, 255, 0.4);
+-    --helium-elevated-80: rgba(175, 190, 255, 0.8);
++    --helium-elevated: #f3e4c8;
++    --helium-elevated-10: rgba(243, 228, 200, 0.10);
++    --helium-elevated-20: rgba(243, 228, 200, 0.20);
++    --helium-elevated-25: rgba(243, 228, 200, 0.25);
++    --helium-elevated-30: rgba(243, 228, 200, 0.30);
++    --helium-elevated-40: rgba(243, 228, 200, 0.40);
++    --helium-elevated-80: rgba(243, 228, 200, 0.80);
+ 
+     --white-80: rgba(255, 255, 255, 0.8);
+     --white-85: rgba(255, 255, 255, 0.85);
+--- a/components/helium_onboarding/index.html	1970-01-01 01:00:00.000000000 +0100
++++ b/components/helium_onboarding/index.html	2026-02-28 20:53:20.444163268 +0100
+@@ -5,7 +5,7 @@
+     <meta charset="UTF-8" />
+     <link rel="icon" type="image/png" href="/favicon.png" />
+     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+-    <title>Helium Setup</title>
++    <title>Zephyr Setup</title>
+ </head>
+ 
+ <body>
